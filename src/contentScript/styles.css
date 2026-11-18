@@ -1,0 +1,12 @@
+/* Styles for enhanced rendering widgets (Mermaid/Pele and KaTeX). */
+
+.cm-enhanced-rendering-block {
+    display: block;
+    margin: 0.5em 0;
+    cursor: pointer;
+}
+
+.cm-enhanced-rendering-inline {
+    display: inline-block;
+    cursor: pointer;
+}

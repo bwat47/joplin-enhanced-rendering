@@ -1,0 +1,11 @@
+{
+    "extraScripts": ["contentScript/enhancedRendering.ts"],
+    "buildOptions": { "target": "es2020" },
+    "contentScriptBuildOptions": {
+        "loader": {
+            ".woff2": "dataurl",
+            ".woff": "empty",
+            ".ttf": "empty"
+        }
+    }
+}
