@@ -2,17 +2,24 @@ A CodeMirror 6 content script plugin that renders Mermaid diagrams (via Pele) an
 
 ---
 
-### 1. Planned Modules
+### 1. Module Structure
 
 - **`src/index.ts`**: Registers the CodeMirror 6 content script (`contentScript/enhancedRendering.js`) with Joplin.
-- **`src/contentScript/enhancedRendering.ts`**: Content script entry point that wires the CM6 extension(s) into `codeMirrorWrapper.addExtension` and exports the bundled stylesheet asset (`./enhancedRendering.css`).
-- **Mermaid rendering (planned)**: `StateField` using `Decoration.replace({ widget, block: true })` to replace ` ```mermaid ` fenced code blocks with Pele-rendered SVGs whenever the editor selection does not overlap the block.
-- **Math rendering (planned)**:
-    - Block math (`$$...$$`): `StateField` using `Decoration.replace({ widget, block: true })` with KaTeX in display mode.
-    - Inline math (`$...$`): `ViewPlugin` (or shared `StateField`) using `Decoration.replace({ widget })` with KaTeX in inline mode.
+- **`src/contentScript/enhancedRendering.ts`**: Content script entry point wiring `blockRenderingField`, `inlineMathPlugin`, and the Pele light/dark theme extension into `codeMirrorWrapper.addExtension`, and exporting `./enhancedRendering.css` via `assets()`.
+- **`src/contentScript/blockRenderingField.ts`**: `StateField<DecorationSet>` providing `Decoration.replace({ widget, block: true })` for closed ` ```mermaid ` fenced code blocks and closed `$$...$$` `BlockMath` nodes whenever no editor selection intersects the block.
+- **`src/contentScript/inlineMathPlugin.ts`**: `ViewPlugin` scanning `view.visibleRanges` for Joplin's `InlineMath` (`$...$`) nodes and replacing non-selected expressions with inline KaTeX widgets.
+- **`src/contentScript/mermaidRenderer.ts`**: Extracts closed, non-blockquoted `mermaid` `FencedCode` blocks (dedenting list-indented fences), renders SVG synchronously via Pele (`images: false`, `links: false`, `responsive: true`) with an LRU cache and unique per-widget SVG ID prefixes, and builds `MermaidWidget` (including `estimatedHeight` and `PeleError` display).
+- **`src/contentScript/mathRenderer.ts`**: Extracts `InlineMath` and closed, non-blockquoted `BlockMath` nodes from Joplin's syntax tree, renders LaTeX synchronously via KaTeX (`trust: false`, LRU-cached), and builds `MathWidget`.
+- **`src/contentScript/renderUtils.ts`**: Shared bounded `LruCache`, inclusive `rangeIntersectsSelection` check, `attachEditOnClick` handler (expands widget on click and places cursor inside the source), and `dedentLines`.
+- **`src/contentScript/styles.css`**: Widget layout, error styling, and specificity overrides restoring `KaTeX_Main` font-family and text color over Joplin's CM6 theme rules.
 
-### 2. Build and Packaging
+### 2. Syntax Tree Integration
+
+- **Math**: Relies on Joplin's built-in `InlineMath` and `BlockMath` Lezer nodes (which Joplin enables when `settings.katexEnabled` is on). Unclosed `BlockMath` nodes extending to EOF and blockquoted math (`> $$`) are skipped so editing remains intact.
+- **Mermaid**: Inspects `@lezer/markdown` `FencedCode` nodes with a `CodeInfo` language token of `mermaid` (case-insensitive) and both opening and closing `CodeMark` children.
+
+### 3. Build and Packaging
 
 `npm run dist` typechecks, then delegates bundling and packaging to `@bwat47/joplin-plugin-scripts`, which uses esbuild to produce `dist/` and the `.jpl` in `publish/`.
 
-`plugin.config.json` registers `contentScript/enhancedRendering.ts` as an `extraScripts` entry and configures esbuild's `loader` map so `.woff2` font imports (from `katex/dist/katex.min.css`) inline as data URIs into the emitted sibling `dist/contentScript/enhancedRendering.css`, while legacy `.woff` and `.ttf` fallbacks are dropped (`empty`). Joplin's CodeMirror and Lezer packages remain external.
+`plugin.config.json` registers `contentScript/enhancedRendering.ts` as an `extraScripts` entry and configures esbuild's `loader` map so `.woff2` font imports (from `katex/dist/katex.min.css`) inline as data URIs into the emitted sibling `dist/contentScript/enhancedRendering.css`, while legacy `.woff` and `.ttf` fallbacks are dropped (`empty`). Because Joplin's `PluginLoader` injects CSS assets into `<style>` tags, inlined `.woff2` data URIs work identically on desktop and mobile without relative font URLs. Joplin's CodeMirror and Lezer packages remain external.

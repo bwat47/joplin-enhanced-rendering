@@ -1,12 +1,62 @@
-/* Styles for enhanced rendering widgets (Mermaid/Pele and KaTeX). */
+/* Styles for enhanced rendering widgets (Mermaid via Pele and Math via KaTeX). */
 
 .cm-enhanced-rendering-block {
     display: block;
-    margin: 0.5em 0;
+    margin: 0.4em 0;
+    padding: 0.4em 0;
+    text-align: center;
+    overflow-x: auto;
     cursor: pointer;
+}
+
+.cm-enhanced-rendering-mermaid > svg.pele {
+    display: block;
+    margin: 0 auto;
+    max-width: 100%;
+    height: auto;
 }
 
 .cm-enhanced-rendering-inline {
     display: inline-block;
+    vertical-align: baseline;
     cursor: pointer;
+}
+
+/*
+ * Joplin's CM6 theme sets `& div, & span, & a { font-family: inherit }` (specificity 0,1,1)
+ * and colors `.cm-inlineMath` / `.cm-mathBlock` green italic. Restore KaTeX's base font
+ * family and normal editor text color on rendered math widgets.
+ */
+.cm-editor .cm-enhanced-rendering-math,
+.cm-editor .cm-enhanced-rendering-math-block {
+    color: var(--joplin-color, inherit);
+    font-style: normal;
+}
+
+.cm-editor .cm-enhanced-rendering-math .katex,
+.cm-editor .cm-enhanced-rendering-math-block .katex {
+    font-family: KaTeX_Main, 'Times New Roman', serif;
+}
+
+.cm-enhanced-rendering-math-block .katex-display {
+    margin: 0.25em 0;
+}
+
+.cm-enhanced-rendering-error {
+    display: inline-block;
+    max-width: 100%;
+    padding: 0.25em 0.5em;
+    border: 1px solid var(--joplin-destructive-color, #cc0000);
+    border-radius: 4px;
+    color: var(--joplin-destructive-color, #cc0000);
+    background-color: rgba(204, 0, 0, 0.08);
+    font-family: monospace;
+    font-size: 0.9em;
+    text-align: left;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.cm-enhanced-rendering-inline .cm-enhanced-rendering-error {
+    padding: 0 0.3em;
 }
