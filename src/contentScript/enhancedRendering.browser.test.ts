@@ -118,4 +118,22 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(getComputedStyle(container).getPropertyValue('--pele-bg').trim()).toBe('#1d2024');
         expect(getComputedStyle(container).getPropertyValue('--pele-fg').trim()).toBe('#dddddd');
     });
+
+    it('renders $$...$$ math inside Mermaid diagrams with measured MathML layout', () => {
+        const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A["$$x^2 + y^2 = z^2$$"] --> B["$$\\frac{a}{b}$$"]\n```';
+        const view = track(createBrowserView(doc, 0));
+
+        const mathObjects = Array.from(
+            view.dom.querySelectorAll<SVGForeignObjectElement>('.cm-enhanced-rendering-mermaid foreignObject.pele-math')
+        );
+        expect(mathObjects).toHaveLength(2);
+
+        for (const foreignObject of mathObjects) {
+            const mathEl = foreignObject.querySelector('math');
+            expect(mathEl).not.toBeNull();
+            const rect = mathEl!.getBoundingClientRect();
+            expect(rect.width).toBeGreaterThan(5);
+            expect(rect.height).toBeGreaterThan(5);
+        }
+    });
 });

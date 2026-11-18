@@ -96,6 +96,24 @@ describe('renderMermaid', () => {
         expect(result.error.length).toBeGreaterThan(0);
     });
 
+    it('renders $$...$$ math labels inside Mermaid diagrams via KaTeX MathML', () => {
+        const result = renderMermaid('flowchart LR\n  A["$$x^2 + y^2 = z^2$$"] --> B["$$\\frac{a}{b}$$"]');
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error('Expected Mermaid render with math to succeed');
+        expect(result.svg).toContain('class="pele-math"');
+        expect(result.svg).toContain('<math');
+    });
+
+    it('falls back gracefully when a Mermaid diagram contains invalid math', () => {
+        const result = renderMermaid('flowchart LR\n  A["$$\\frac{1}$$"] --> B[Done]');
+
+        expect(result.ok).toBe(true);
+        if (!result.ok) throw new Error('Expected Mermaid render with invalid math label to succeed');
+        expect(result.svg).toContain('<svg');
+        expect(result.svg).toContain('Done');
+    });
+
     it('implements widget equality and height estimation', () => {
         const result = renderMermaid('flowchart LR\n  A --> B');
         const widgetA = new MermaidWidget('flowchart LR\n  A --> B', result, 11);

@@ -7,6 +7,7 @@ import {
     extractInlineMath,
     MathWidget,
     renderMath,
+    renderMermaidMath,
     type MathExpression,
 } from './mathRenderer';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
@@ -105,5 +106,26 @@ describe('renderMath', () => {
         expect(widgetA.eq(widgetB)).toBe(true);
         expect(widgetA.eq(widgetC)).toBe(false);
         expect(widgetA.ignoreEvent()).toBe(true);
+    });
+});
+
+describe('renderMermaidMath', () => {
+    beforeEach(() => {
+        clearMathRenderCache();
+    });
+
+    it('renders MathML markup with positive dimensions and caches results', () => {
+        const first = renderMermaidMath('\\frac{a}{b}', 16);
+        const second = renderMermaidMath('\\frac{a}{b}', 16);
+
+        expect(first).not.toBeNull();
+        expect(first && 'html' in first ? first.html : '').toContain('<math');
+        expect(first?.width).toBeGreaterThan(0);
+        expect(first?.height).toBeGreaterThan(0);
+        expect(second).toBe(first);
+    });
+
+    it('returns null for invalid LaTeX so Pele falls back to raw text', () => {
+        expect(renderMermaidMath('\\frac{1}', 16)).toBeNull();
     });
 });

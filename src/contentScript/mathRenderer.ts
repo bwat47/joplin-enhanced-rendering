@@ -2,6 +2,7 @@ import type { EditorState } from '@codemirror/state';
 import { WidgetType, type EditorView } from '@codemirror/view';
 import type { SyntaxNodeRef } from '@lezer/common';
 import { ParseError, renderToString } from 'katex';
+import type { MathMarkup } from 'pele';
 
 import { logger } from '../logger';
 import { attachEditOnClick, LruCache } from './renderUtils';
@@ -22,12 +23,97 @@ const INLINE_MATH_NODE = 'InlineMath';
 const BLOCK_MATH_NODE = 'BlockMath';
 
 const mathCache = new LruCache<string, MathRenderResult>();
+const mermaidMathCache = new LruCache<string, MathMarkup | null>();
+
+let mathProbe: HTMLDivElement | null = null;
 
 /**
  * Clears the cached KaTeX render outputs (useful in tests).
  */
 export function clearMathRenderCache(): void {
     mathCache.clear();
+    mermaidMathCache.clear();
+}
+
+function getMathProbe(): HTMLDivElement | null {
+    if (typeof document === 'undefined') {
+        return null;
+    }
+
+    if (!mathProbe || !mathProbe.isConnected) {
+        mathProbe = document.createElement('div');
+        mathProbe.setAttribute('aria-hidden', 'true');
+        mathProbe.style.cssText =
+            'position:fixed;top:-9999px;left:-9999px;visibility:hidden;pointer-events:none;display:inline-block;line-height:normal;white-space:nowrap;';
+        document.body.append(mathProbe);
+    }
+
+    return mathProbe;
+}
+
+function estimateMathDimensions(tex: string, size: number): { width: number; height: number } {
+    return {
+        width: Math.max(size, Math.ceil(tex.length * size * 0.6)),
+        height: Math.ceil(size * 1.4),
+    };
+}
+
+/**
+ * Pele `MathResolver` callback that typesets `$$...$$` labels inside Mermaid diagrams using
+ * KaTeX MathML output and measures their rendered box via a hidden DOM probe.
+ *
+ * Uses MathML (`<math>`) rather than KaTeX HTML to avoid WebKit's `<foreignObject>` positioning
+ * bug on iOS and to inherit Pele's SVG label colors automatically across themes.
+ */
+export function renderMermaidMath(tex: string, size: number): MathMarkup | null {
+    const cacheKey = `${size}:${tex}`;
+    const cached = mermaidMathCache.get(cacheKey);
+    if (cached !== undefined) {
+        return cached;
+    }
+
+    let katexOutput: string;
+    try {
+        katexOutput = renderToString(tex, {
+            displayMode: true,
+            output: 'mathml',
+            throwOnError: true,
+            trust: false,
+            strict: 'ignore',
+        });
+    } catch (error) {
+        if (!(error instanceof ParseError)) {
+            logger.debug('Unexpected error rendering KaTeX math in Mermaid diagram', error);
+        }
+        mermaidMathCache.set(cacheKey, null);
+        return null;
+    }
+
+    const probe = getMathProbe();
+    let result: MathMarkup | null = null;
+
+    if (probe) {
+        probe.style.fontSize = `${size}px`;
+        probe.innerHTML = katexOutput;
+        const expression = probe.querySelector('math');
+        if (expression) {
+            const rect = expression.getBoundingClientRect();
+            const dimensions =
+                rect.width > 0 && rect.height > 0
+                    ? { width: Math.ceil(rect.width), height: Math.ceil(rect.height) }
+                    : estimateMathDimensions(tex, size);
+            result = { html: expression.outerHTML, ...dimensions };
+        }
+        probe.innerHTML = '';
+    } else {
+        const mathMatch = /<math[\s\S]*<\/math>/.exec(katexOutput);
+        if (mathMatch) {
+            result = { html: mathMatch[0], ...estimateMathDimensions(tex, size) };
+        }
+    }
+
+    mermaidMathCache.set(cacheKey, result);
+    return result;
 }
 
 /**

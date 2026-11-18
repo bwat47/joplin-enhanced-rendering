@@ -4,6 +4,7 @@ import type { SyntaxNodeRef } from '@lezer/common';
 import { PeleError, render as renderPele } from 'pele';
 
 import { logger } from '../logger';
+import { renderMermaidMath } from './mathRenderer';
 import { attachEditOnClick, dedentLines, LruCache } from './renderUtils';
 
 export interface MermaidBlock {
@@ -127,6 +128,7 @@ export function renderMermaid(source: string): MermaidRenderResult {
             responsive: true,
             images: false,
             links: false,
+            math: renderMermaidMath,
         });
         result = {
             ok: true,
