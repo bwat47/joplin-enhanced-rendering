@@ -136,4 +136,48 @@ describe('enhancedRenderingExtension (browser)', () => {
             expect(rect.height).toBeGreaterThan(5);
         }
     });
+
+    it('maps clicks accurately to every visible line after scrolling past many block math and Mermaid widgets', async () => {
+        const sections = Array.from({ length: 80 }, (_, i) => {
+            if (i % 10 === 0) {
+                return `Section ${i + 1} diagram:\n\n\`\`\`mermaid\nflowchart LR\n  A${i} --> B${i}\n\`\`\`\n`;
+            }
+            if (i % 5 === 0) {
+                return `Section ${i + 1} matrix:\n\n$$\n\\begin{bmatrix}\n1 & 2 & 3 \\\\\n4 & 5 & 6 \\\\\n7 & 8 & 9\n\\end{bmatrix}\n$$\n`;
+            }
+            return `Section ${i + 1} label:\n\n$$\n\\frac{x_${i + 1} + 1}{y_${i + 1} + 2}\n$$\n`;
+        }).join('\n');
+        const doc = `# Top\n\n${sections}\nFinal line.`;
+
+        const view = track(
+            createBrowserView(doc, 0, [
+                EditorView.theme({
+                    '&': { height: '400px' },
+                    '& .cm-scroller': { overflow: 'auto' },
+                }),
+            ])
+        );
+
+        // Scroll deep past dozens of rendered block widgets.
+        view.scrollDOM.scrollTop = 4000;
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const scrollerRect = view.scrollDOM.getBoundingClientRect();
+        const visibleTextLines = Array.from(view.contentDOM.querySelectorAll<HTMLElement>('.cm-line')).filter((el) => {
+            if (!el.textContent.includes('Section ')) return false;
+            const rect = el.getBoundingClientRect();
+            return rect.top >= scrollerRect.top && rect.bottom <= scrollerRect.bottom;
+        });
+
+        expect(visibleTextLines.length).toBeGreaterThan(0);
+
+        for (const lineEl of visibleTextLines) {
+            const expectedLineNumber = view.state.doc.lineAt(view.posAtDOM(lineEl)).number;
+            const rect = lineEl.getBoundingClientRect();
+            const clickPos = view.posAtCoords({ x: rect.left + 10, y: rect.top + rect.height / 2 });
+
+            expect(clickPos).not.toBeNull();
+            expect(view.state.doc.lineAt(clickPos!).number).toBe(expectedLineNumber);
+        }
+    });
 });

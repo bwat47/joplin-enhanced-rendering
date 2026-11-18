@@ -24,6 +24,7 @@ const BLOCK_MATH_NODE = 'BlockMath';
 
 const mathCache = new LruCache<string, MathRenderResult>();
 const mermaidMathCache = new LruCache<string, MathMarkup | null>();
+const mathHeightCache = new LruCache<string, number>(500);
 
 let mathProbe: HTMLDivElement | null = null;
 
@@ -33,6 +34,7 @@ let mathProbe: HTMLDivElement | null = null;
 export function clearMathRenderCache(): void {
     mathCache.clear();
     mermaidMathCache.clear();
+    mathHeightCache.clear();
 }
 
 function getMathProbe(): HTMLDivElement | null {
@@ -244,6 +246,10 @@ export class MathWidget extends WidgetType {
         );
     }
 
+    public override get estimatedHeight(): number {
+        return this.displayMode ? (mathHeightCache.get(this.tex) ?? -1) : -1;
+    }
+
     public override toDOM(view: EditorView): HTMLElement {
         const doc = view.dom.ownerDocument;
         const container = doc.createElement(this.displayMode ? 'div' : 'span');
@@ -260,6 +266,15 @@ export class MathWidget extends WidgetType {
             errorEl.title = this.result.error;
             errorEl.textContent = this.displayMode ? `KaTeX error: ${this.result.error}` : this.tex;
             container.appendChild(errorEl);
+        }
+
+        if (this.displayMode) {
+            const win = doc.defaultView;
+            win?.requestAnimationFrame(() => {
+                if (container.isConnected && container.offsetHeight > 0) {
+                    mathHeightCache.set(this.tex, container.offsetHeight);
+                }
+            });
         }
 
         attachEditOnClick(container, view, this.editOffset);

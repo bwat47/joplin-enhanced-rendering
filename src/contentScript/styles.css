@@ -1,9 +1,15 @@
 /* Styles for enhanced rendering widgets (Mermaid via Pele and Math via KaTeX). */
 
+/*
+ * Block widgets in CodeMirror 6 must NOT have vertical margins: CM6's HeightMap measures each
+ * block's border-box height and assumes adjacent blocks stack flush. Vertical margins cause
+ * cumulative drift in `posAtCoords`, placing clicks below the clicked line. Use padding instead.
+ */
 .cm-enhanced-rendering-block {
     display: block;
-    margin: 0.4em 0;
-    padding: 0.4em 0;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0.6em 0;
     text-align: center;
     overflow-x: auto;
     cursor: pointer;
@@ -39,7 +45,7 @@
 }
 
 .cm-enhanced-rendering-math-block .katex-display {
-    margin: 0.25em 0;
+    margin: 0;
 }
 
 .cm-enhanced-rendering-error {
