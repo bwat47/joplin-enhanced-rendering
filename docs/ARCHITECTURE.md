@@ -7,7 +7,7 @@ A CodeMirror 6 content script plugin that renders Mermaid diagrams (via Pele) an
 - **`src/index.ts`**: Registers the CodeMirror 6 content script (`contentScript/enhancedRendering.js`) with Joplin.
 - **`src/contentScript/enhancedRendering.ts`**: Content script entry point wiring `pointerRevealFreezeExtension`, `blockRenderingExtension`, `inlineMathPlugin`, and the Pele light/dark theme extension into `codeMirrorWrapper.addExtension`, and exporting `./enhancedRendering.css` via `assets()`.
 - **`src/contentScript/pointerRevealFreeze.ts`**: Freezes the effective selection used for revealing/collapsing widgets during left-button mouse gestures (`mousedown` → `mouseup` + `blur`/`dragend`/`mousemove` safety listeners) so dragging a selection across rendered Mermaid or math blocks does not shift document layout mid-drag.
-- **`src/contentScript/blockRenderingField.ts`**: `StateField<DecorationSet>` providing `Decoration.replace({ widget, block: true })` for closed ` ```mermaid ` fenced code blocks and closed `$$...$$` `BlockMath` nodes whenever the effective reveal selection does not intersect the block, plus a vertical-navigation transaction filter so `ArrowDown`/`ArrowUp` enters replaced blocks.
+- **`src/contentScript/blockRenderingField.ts`**: `StateField<BlockRenderingState>` storing parsed block entries, active decorations, and a per-editor cache of widget decorations. It provides block replacements for closed Mermaid fences and display math through `EditorView.decorations` when the effective reveal selection is outside the block. A transaction filter lets vertical cursor movement enter replaced blocks.
 - **`src/contentScript/inlineMathPlugin.ts`**: `ViewPlugin` scanning `view.visibleRanges` for Joplin's `InlineMath` (`$...$`) nodes and replacing non-selected expressions with inline KaTeX widgets.
 - **`src/contentScript/mermaidRenderer.ts`**: Extracts closed, non-blockquoted `mermaid` `FencedCode` blocks (dedenting list-indented fences), renders SVG synchronously via Pele (`images: false`, `links: false`, `responsive: true`, `math: renderMermaidMath`) with an LRU cache and unique per-widget SVG ID prefixes, and builds `MermaidWidget` (including `estimatedHeight` and `PeleError` display).
 - **`src/contentScript/mathRenderer.ts`**: Extracts `InlineMath` and closed, non-blockquoted `BlockMath` nodes from Joplin's syntax tree, renders LaTeX synchronously via KaTeX (`trust: false`, LRU-cached), provides the Pele `MathResolver` (`renderMermaidMath`, using KaTeX MathML output + hidden DOM measurement probe for `$$...$$` labels inside Mermaid diagrams), and builds `MathWidget`.
@@ -18,6 +18,10 @@ A CodeMirror 6 content script plugin that renders Mermaid diagrams (via Pele) an
 
 - **Math**: Relies on Joplin's built-in `InlineMath` and `BlockMath` Lezer nodes (which Joplin enables when `settings.katexEnabled` is on). Unclosed `BlockMath` nodes extending to EOF and blockquoted math (`> $$`) are skipped so editing remains intact.
 - **Mermaid**: Inspects `@lezer/markdown` `FencedCode` nodes with a `CodeInfo` language token of `mermaid` (case-insensitive) and both opening and closing `CodeMark` children.
+
+When only the effective reveal selection changes, the block field checks the recorded ranges and reuses the existing state if the same blocks stay rendered. Revealing a block preserves its cached decoration. A block without a cached decoration is rendered when the selection leaves it.
+
+Document edits and syntax-tree updates rebuild the block entries from the current tree. The field reuses cached widget decorations keyed by block kind, extracted source, and cursor edit offset, and applies them at the current document positions. Identical blocks share a decoration and track their end positions separately. During a partial parse, the field keeps cached entries whose mapped replacement-range ends survive beyond the parsed region so later parse updates can reuse them.
 
 ### 3. Build and Packaging
 
