@@ -7,6 +7,9 @@ Render Mermaid diagrams (via [Pele](https://github.com/obsidianmd/pele)) and inl
 
 ![example screenshot](https://github.com/bwat47/joplin-enhanced-rendering/blob/main/images/example.png)
 
+> [!note]
+> Math rendering requires "Enable math expressions (wysiwyg: yes)" to be enabled under Tools | Options | Markdown (otherwise the syntax tree nodes for math aren't available in the editor).
+
 ## Requirements
 
 - Joplin 3.7 or newer
