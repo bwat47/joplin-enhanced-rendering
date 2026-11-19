@@ -152,7 +152,7 @@ export class MermaidWidget extends WidgetType {
     public constructor(
         private readonly source: string,
         private readonly result: MermaidRenderResult,
-        private readonly editOffset: number
+        public readonly editOffset: number
     ) {
         super();
     }

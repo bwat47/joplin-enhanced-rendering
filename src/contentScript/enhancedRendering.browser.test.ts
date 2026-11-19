@@ -1,10 +1,14 @@
 import { cursorLineDown, cursorLineUp } from '@codemirror/commands';
 import { EditorState, type Extension } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { drawSelection, EditorView, rectangularSelection } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
+import { userEvent } from 'vitest/browser';
 
 import { enhancedRenderingExtension } from './enhancedRendering';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
+
+// Match Joplin's createEditor.ts, which disables Chrome EditContext and uses contenteditable.
+(EditorView as unknown as { EDIT_CONTEXT: boolean }).EDIT_CONTEXT = false;
 
 // Simulates Joplin's CM6 theme rules from packages/editor/CodeMirror/theme.ts that could
 // otherwise interfere with KaTeX font family and math colors.
@@ -33,6 +37,9 @@ function createBrowserView(doc: string, cursorPos = 0, extraExtensions: Extensio
             selection: { anchor: cursorPos },
             extensions: [
                 createJoplinMarkdownExtension(),
+                EditorState.allowMultipleSelections.of(true),
+                rectangularSelection(),
+                drawSelection(),
                 joplinThemeOverrides,
                 enhancedRenderingExtension,
                 ...extraExtensions,
@@ -57,7 +64,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         views = [];
     });
 
-    it('renders a Pele Mermaid SVG with non-zero layout dimensions and supports click-to-edit', () => {
+    it('renders a Pele Mermaid SVG with non-zero layout dimensions and supports click-to-edit', async () => {
         const doc = 'Heading\n\n```mermaid\nflowchart LR\n  A[Input] --> B[Output]\n```\n\nFooter';
         const view = track(createBrowserView(doc, 0));
 
@@ -69,7 +76,8 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(rect.height).toBeGreaterThan(20);
 
         const widget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-mermaid')!;
-        widget.click();
+        view.focus();
+        await userEvent.click(widget, { delay: 100 });
 
         expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
         expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
@@ -219,5 +227,28 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(view.dom.querySelector('.cm-enhanced-rendering-math')).toBeNull();
         expect(view.state.selection.main.from).toBe(0);
         expect(view.state.selection.main.to).toBe(doc.length);
+    });
+
+    it('places the cursor on the first content line below the opening fence when clicking Mermaid or block math', async () => {
+        const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A[Input] --> B[Output]\n```\n\n$$\nx = y + z\n$$\n\nFooter';
+        const view = track(createBrowserView(doc, 0));
+        view.focus();
+
+        // Click on the left padding of the Mermaid block widget.
+        const mermaidWidget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-mermaid')!;
+        await userEvent.click(mermaidWidget, { position: { x: 5, y: 15 } });
+        expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
+
+        // Move back to Intro and click on the SVG text label inside the Mermaid diagram.
+        view.dispatch({ selection: { anchor: 0 } });
+        const svgLabel = view.dom.querySelector<SVGTextElement>('.cm-enhanced-rendering-mermaid text.pele-label')!;
+        await userEvent.click(svgLabel);
+        expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
+
+        // Click on the multi-line block math widget even when text is currently selected elsewhere.
+        view.dispatch({ selection: { anchor: 0, head: 5 } });
+        const mathWidget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        await userEvent.click(mathWidget);
+        expect(view.state.selection.main.head).toBe(doc.indexOf('x = y + z'));
     });
 });

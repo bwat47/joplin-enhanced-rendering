@@ -153,4 +153,33 @@ describe('pointerRevealFreezeExtension', () => {
 
         expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
     });
+
+    it('redirects a collapsed pointer click on a block boundary to the first content line below the opening fence', () => {
+        const doc = 'Top\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n$$\nx = 1\n$$\n\nBottom';
+        const view = track(createView(doc, 0));
+
+        // Simulate clicking in the editor side margin next to the Mermaid block (CM6 hits openLine.from).
+        view.dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1 }));
+        view.dispatch({
+            selection: { anchor: doc.indexOf('```mermaid') },
+            userEvent: 'select.pointer',
+        });
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+        flushAnimationFrames();
+
+        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(0);
+        expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
+
+        // Same for multi-line block math.
+        view.dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1 }));
+        view.dispatch({
+            selection: { anchor: doc.indexOf('$$') },
+            userEvent: 'select.pointer',
+        });
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+        flushAnimationFrames();
+
+        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.state.selection.main.head).toBe(doc.indexOf('x = 1'));
+    });
 });

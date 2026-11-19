@@ -13,7 +13,7 @@ import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
 import { extractBlockMath, MathWidget, renderMath } from './mathRenderer';
 import { extractMermaidBlock, MermaidWidget, renderMermaid } from './mermaidRenderer';
-import { getRevealSelection, hasRevealSelectionChanged } from './pointerRevealFreeze';
+import { getRevealSelection, hasRevealSelectionChanged, isReleasingFrozenSelection } from './pointerRevealFreeze';
 import { rangeIntersectsSelection } from './renderUtils';
 
 function buildBlockDecorations(state: EditorState): DecorationSet {
@@ -80,6 +80,15 @@ interface BlockLineSpan {
     to: number;
     startLine: number;
     endLine: number;
+    editOffset: number;
+}
+
+function getWidgetEditOffset(decoration: Decoration): number {
+    const widget = (decoration.spec as { widget?: unknown }).widget;
+    if (widget instanceof MermaidWidget || widget instanceof MathWidget) {
+        return widget.editOffset;
+    }
+    return 0;
 }
 
 function collectBlockSpans(doc: Text, decorations: DecorationSet): BlockLineSpan[] {
@@ -90,6 +99,7 @@ function collectBlockSpans(doc: Text, decorations: DecorationSet): BlockLineSpan
             to: iter.to,
             startLine: doc.lineAt(iter.from).number,
             endLine: doc.lineAt(iter.to).number,
+            editOffset: getWidgetEditOffset(iter.value),
         });
     }
     return spans;
@@ -129,7 +139,41 @@ function findSkippedBlockEntryPos(spans: BlockLineSpan[], oldLine: number, newLi
         : findUpwardEntryPos(spans, oldLine, newLine);
 }
 
+function findBoundaryClickEditPos(spans: BlockLineSpan[], cursorPos: number, docLength: number): number | null {
+    for (const span of spans) {
+        if ((cursorPos === span.from || cursorPos === span.to) && span.editOffset > 0) {
+            return Math.min(span.from + span.editOffset, docLength);
+        }
+    }
+    return null;
+}
+
+function redirectBlockBoundaryClick(transaction: Transaction): TransactionSpec | readonly TransactionSpec[] | null {
+    if (transaction.docChanged || transaction.selection || !isReleasingFrozenSelection(transaction)) {
+        return null;
+    }
+
+    const selection = transaction.startState.selection;
+    if (selection.ranges.length !== 1 || !selection.main.empty) {
+        return null;
+    }
+
+    const doc = transaction.startState.doc;
+    const decorations = transaction.startState.field(blockRenderingField);
+    const editPos = findBoundaryClickEditPos(collectBlockSpans(doc, decorations), selection.main.head, doc.length);
+    if (editPos === null) {
+        return null;
+    }
+
+    return [transaction, { selection: EditorSelection.cursor(editPos) }];
+}
+
 function redirectSkippedBlockSelection(transaction: Transaction): TransactionSpec | readonly TransactionSpec[] {
+    const boundaryRedirect = redirectBlockBoundaryClick(transaction);
+    if (boundaryRedirect !== null) {
+        return boundaryRedirect;
+    }
+
     if (
         transaction.docChanged ||
         !transaction.selection ||

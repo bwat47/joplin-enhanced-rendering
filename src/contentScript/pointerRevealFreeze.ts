@@ -17,6 +17,16 @@ export function clearFrozenSelectionEffect(): StateEffect<EditorSelection | null
     return setFrozenSelectionEffect.of(null);
 }
 
+/**
+ * Returns true when `transaction` is explicitly releasing an active pointer-drag reveal freeze.
+ */
+export function isReleasingFrozenSelection(transaction: Transaction): boolean {
+    return (
+        transaction.startState.field(frozenSelectionField, false) !== null &&
+        transaction.effects.some((effect) => effect.is(setFrozenSelectionEffect) && effect.value === null)
+    );
+}
+
 function updateFrozenSelection(value: EditorSelection | null, transaction: Transaction): EditorSelection | null {
     for (const effect of transaction.effects) {
         if (effect.is(setFrozenSelectionEffect)) {

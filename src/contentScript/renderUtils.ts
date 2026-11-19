@@ -49,30 +49,55 @@ export function rangeIntersectsSelection(selection: EditorSelection, from: numbe
     return false;
 }
 
+const CLICK_DRAG_THRESHOLD_PX = 5;
+
+function isOnHorizontalScrollbar(element: HTMLElement, event: MouseEvent): boolean {
+    const rect = element.getBoundingClientRect();
+    return event.clientY > rect.top + element.clientHeight;
+}
+
 /**
  * Moves the CodeMirror selection inside the widget's replaced document range when clicked,
  * causing the live-preview decoration to expand back into raw Markdown for editing.
  */
 export function attachEditOnClick(element: HTMLElement, view: EditorView, editOffset: number): void {
-    element.addEventListener('click', (event: MouseEvent) => {
-        if (event.button !== 0) {
+    let pointerDownPoint: { x: number; y: number } | null = null;
+
+    element.addEventListener('mousedown', (event: MouseEvent) => {
+        if (event.button !== 0 || isOnHorizontalScrollbar(element, event)) {
+            pointerDownPoint = null;
             return;
         }
 
-        const domSelection = view.dom.ownerDocument.defaultView?.getSelection();
-        if (domSelection && !domSelection.isCollapsed) {
+        // Prevent native contenteditable caret placement and accidental SVG/KaTeX text selection
+        // so the widget stays mounted until release and clicks land reliably at `editOffset`.
+        event.preventDefault();
+        pointerDownPoint = { x: event.clientX, y: event.clientY };
+    });
+
+    element.addEventListener('click', (event: MouseEvent) => {
+        if (event.button !== 0 || isOnHorizontalScrollbar(element, event)) {
             return;
+        }
+
+        if (pointerDownPoint) {
+            const dx = Math.abs(event.clientX - pointerDownPoint.x);
+            const dy = Math.abs(event.clientY - pointerDownPoint.y);
+            pointerDownPoint = null;
+            if (dx > CLICK_DRAG_THRESHOLD_PX || dy > CLICK_DRAG_THRESHOLD_PX) {
+                return;
+            }
         }
 
         event.preventDefault();
         const basePos = view.posAtDOM(element);
         const anchor = Math.max(0, Math.min(basePos + editOffset, view.state.doc.length));
-        view.focus();
         view.dispatch({
             selection: { anchor },
             effects: clearFrozenSelectionEffect(),
             scrollIntoView: false,
         });
+        view.focus();
     });
 }
 

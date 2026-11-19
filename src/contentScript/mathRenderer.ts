@@ -231,7 +231,7 @@ export class MathWidget extends WidgetType {
         private readonly tex: string,
         private readonly displayMode: boolean,
         private readonly result: MathRenderResult,
-        private readonly editOffset: number
+        public readonly editOffset: number
     ) {
         super();
     }
