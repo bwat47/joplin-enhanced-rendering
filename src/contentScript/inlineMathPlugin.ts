@@ -10,10 +10,12 @@ import {
 } from '@codemirror/view';
 
 import { extractInlineMath, MathWidget, renderMath } from './mathRenderer';
+import { getRevealSelection, hasRevealSelectionChanged } from './pointerRevealFreeze';
 import { rangeIntersectsSelection } from './renderUtils';
 
 function buildInlineMathDecorations(view: EditorView): DecorationSet {
     const state = view.state;
+    const revealSelection = getRevealSelection(state);
     const tree = syntaxTree(state);
     const decorations: Range<Decoration>[] = [];
     const seen = new Set<number>();
@@ -29,7 +31,7 @@ function buildInlineMathDecorations(view: EditorView): DecorationSet {
                 seen.add(node.from);
 
                 const expr = extractInlineMath(state, node);
-                if (!expr || rangeIntersectsSelection(state.selection, expr.replaceFrom, expr.replaceTo)) {
+                if (!expr || rangeIntersectsSelection(revealSelection, expr.replaceFrom, expr.replaceTo)) {
                     return;
                 }
 
@@ -51,8 +53,9 @@ class InlineMathPlugin implements PluginValue {
     }
 
     public update(update: ViewUpdate): void {
+        const revealSelectionChanged = hasRevealSelectionChanged(update.startState, update.state);
         const treeChanged = syntaxTree(update.state) !== syntaxTree(update.startState);
-        if (update.docChanged || update.viewportChanged || update.selectionSet || treeChanged) {
+        if (update.docChanged || update.viewportChanged || revealSelectionChanged || treeChanged) {
             this.decorations = buildInlineMathDecorations(update.view);
         }
     }

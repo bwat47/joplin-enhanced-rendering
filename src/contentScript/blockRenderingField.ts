@@ -13,16 +13,18 @@ import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
 import { extractBlockMath, MathWidget, renderMath } from './mathRenderer';
 import { extractMermaidBlock, MermaidWidget, renderMermaid } from './mermaidRenderer';
+import { getRevealSelection, hasRevealSelectionChanged } from './pointerRevealFreeze';
 import { rangeIntersectsSelection } from './renderUtils';
 
 function buildBlockDecorations(state: EditorState): DecorationSet {
     const decorations: Range<Decoration>[] = [];
+    const revealSelection = getRevealSelection(state);
 
     syntaxTree(state).iterate({
         enter(node) {
             if (node.name === 'FencedCode') {
                 const block = extractMermaidBlock(state, node);
-                if (block && !rangeIntersectsSelection(state.selection, block.replaceFrom, block.replaceTo)) {
+                if (block && !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo)) {
                     const result = renderMermaid(block.source);
                     const widget = new MermaidWidget(block.source, result, block.editOffset);
                     decorations.push(
@@ -34,7 +36,7 @@ function buildBlockDecorations(state: EditorState): DecorationSet {
 
             if (node.name === 'BlockMath') {
                 const expr = extractBlockMath(state, node);
-                if (expr && !rangeIntersectsSelection(state.selection, expr.replaceFrom, expr.replaceTo)) {
+                if (expr && !rangeIntersectsSelection(revealSelection, expr.replaceFrom, expr.replaceTo)) {
                     const result = renderMath(expr.tex, true);
                     const widget = new MathWidget(expr.tex, true, result, expr.editOffset);
                     decorations.push(
@@ -61,10 +63,10 @@ const blockRenderingField = StateField.define<DecorationSet>({
         return buildBlockDecorations(state);
     },
     update(decorations, transaction): DecorationSet {
-        const selectionChanged = !transaction.newSelection.eq(transaction.startState.selection);
+        const revealSelectionChanged = hasRevealSelectionChanged(transaction.startState, transaction.state);
         const treeChanged = syntaxTree(transaction.state) !== syntaxTree(transaction.startState);
 
-        if (transaction.docChanged || selectionChanged || treeChanged) {
+        if (transaction.docChanged || revealSelectionChanged || treeChanged) {
             return buildBlockDecorations(transaction.state);
         }
 

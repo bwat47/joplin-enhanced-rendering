@@ -1,6 +1,8 @@
 import type { EditorSelection } from '@codemirror/state';
 import type { EditorView } from '@codemirror/view';
 
+import { clearFrozenSelectionEffect } from './pointerRevealFreeze';
+
 /**
  * Small bounded LRU cache used to memoize rendered SVG/HTML outputs across editor updates.
  */
@@ -68,6 +70,7 @@ export function attachEditOnClick(element: HTMLElement, view: EditorView, editOf
         view.focus();
         view.dispatch({
             selection: { anchor },
+            effects: clearFrozenSelectionEffect(),
             scrollIntoView: false,
         });
     });

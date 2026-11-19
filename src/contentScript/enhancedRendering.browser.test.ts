@@ -180,4 +180,44 @@ describe('enhancedRenderingExtension (browser)', () => {
             expect(view.state.doc.lineAt(clickPos!).number).toBe(expectedLineNumber);
         }
     });
+
+    it('freezes widget reveal during a left-button mouse drag and reveals on mouseup', async () => {
+        const doc = 'Start line\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nInline $x + 1$ end line';
+        const view = track(createBrowserView(doc, 0));
+
+        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector('.cm-enhanced-rendering-math')).not.toBeNull();
+
+        const firstLine = view.contentDOM.querySelector<HTMLElement>('.cm-line')!;
+        const firstRect = firstLine.getBoundingClientRect();
+
+        firstLine.dispatchEvent(
+            new MouseEvent('mousedown', {
+                bubbles: true,
+                cancelable: true,
+                button: 0,
+                buttons: 1,
+                clientX: firstRect.left + 5,
+                clientY: firstRect.top + firstRect.height / 2,
+            })
+        );
+
+        view.dispatch({
+            selection: { anchor: 0, head: doc.length },
+            userEvent: 'select.pointer',
+        });
+
+        // Both Mermaid and inline math remain rendered while left button is held.
+        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector('.cm-enhanced-rendering-math')).not.toBeNull();
+
+        document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        // After mouseup, both expand to raw Markdown while keeping the dragged selection.
+        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
+        expect(view.dom.querySelector('.cm-enhanced-rendering-math')).toBeNull();
+        expect(view.state.selection.main.from).toBe(0);
+        expect(view.state.selection.main.to).toBe(doc.length);
+    });
 });
