@@ -420,7 +420,8 @@ function redirectSkippedBlockSelection(transaction: Transaction): TransactionSpe
         oldSelection.ranges.length !== 1 ||
         newSelection.ranges.length !== 1 ||
         !oldSelection.main.empty ||
-        !newSelection.main.empty
+        !newSelection.main.empty ||
+        newSelection.main.goalColumn === undefined
     ) {
         return transaction;
     }

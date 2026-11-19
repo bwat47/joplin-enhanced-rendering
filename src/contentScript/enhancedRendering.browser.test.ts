@@ -1,4 +1,4 @@
-import { cursorLineDown, cursorLineUp } from '@codemirror/commands';
+import { cursorDocEnd, cursorDocStart, cursorLineDown, cursorLineUp } from '@codemirror/commands';
 import { EditorState, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, rectangularSelection } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -116,6 +116,23 @@ describe('enhancedRenderingExtension (browser)', () => {
 
         expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
         expect(view.contentDOM.textContent).toContain('flowchart LR');
+    });
+
+    it('does not redirect cursorDocEnd or cursorDocStart into a rendered block between the first and last lines', () => {
+        const doc = 'Line above\n```mermaid\nflowchart LR\n  A --> B\n```\nLine below';
+        const view = track(createBrowserView(doc, 0));
+
+        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+
+        cursorDocEnd(view);
+
+        expect(view.state.selection.main.head).toBe(doc.length);
+        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+
+        cursorDocStart(view);
+
+        expect(view.state.selection.main.head).toBe(0);
+        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
     });
 
     it('applies dark fallback Pele CSS variables under a dark CodeMirror theme', () => {
