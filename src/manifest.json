@@ -10,5 +10,13 @@
     "homepage_url": "https://github.com/bwat47/joplin-enhanced-rendering",
     "repository_url": "https://github.com/bwat47/joplin-enhanced-rendering",
     "keywords": ["editor", "markdown", "mermaid", "katex", "math", "live-preview"],
-    "categories": ["appearance", "editor"]
+    "categories": ["appearance", "editor"],
+    "screenshots": [
+        { "src": "images/mermaid.png", "label": "Mermaid rendering" },
+        { "src": "images/math.png", "label": "Math rendering" }
+    ],
+    "promo_tile": {
+        "src": "images/promo_tile.png",
+        "label": "Enhanced Rendering Promo Tile"
+    }
 }

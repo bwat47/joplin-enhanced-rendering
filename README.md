@@ -1,9 +1,11 @@
 > [!note]
-> This plugin was created entirely with AI tools
+> This plugin is developed with AI assistance
 
 # Enhanced Rendering
 
 Render Mermaid diagrams (via [Pele](https://github.com/obsidianmd/pele)) and inline/block math (via [KaTeX](https://katex.org/)) directly in Joplin's CodeMirror 6 Markdown editor.
+
+![example screenshot](https://github.com/bwat47/joplin-enhanced-rendering/blob/main/images/example.png)
 
 ## Requirements
 
