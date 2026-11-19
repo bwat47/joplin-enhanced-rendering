@@ -52,8 +52,12 @@ export function rangeIntersectsSelection(selection: EditorSelection, from: numbe
 const CLICK_DRAG_THRESHOLD_PX = 5;
 
 function isOnHorizontalScrollbar(element: HTMLElement, event: MouseEvent): boolean {
+    if (element.scrollWidth <= element.clientWidth) {
+        return false;
+    }
+
     const rect = element.getBoundingClientRect();
-    return event.clientY > rect.top + element.clientHeight;
+    return event.clientY >= rect.top + element.clientTop + element.clientHeight;
 }
 
 /**
