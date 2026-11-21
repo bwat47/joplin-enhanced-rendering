@@ -137,6 +137,9 @@ describe('renderMermaid', () => {
         const widget = new MermaidWidget(source, 11, 640);
 
         expect(widget.eq(new MermaidWidget(source, 11, 640))).toBe(true);
+        expect(widget.eq(new MermaidWidget(source, 11, 640.9))).toBe(true);
+        expect(new MermaidWidget(source, 11, 0).eq(new MermaidWidget(source, 11))).toBe(true);
+        expect(new MermaidWidget(source, 11, Number.NaN).eq(new MermaidWidget(source, 11))).toBe(true);
         expect(widget.eq(new MermaidWidget(source, 11, 320))).toBe(false);
         expect(widget.eq(new MermaidWidget(source, 12, 640))).toBe(false);
         expect(widget.eq(new MermaidWidget('flowchart TD\n  A --> B', 11, 640))).toBe(false);

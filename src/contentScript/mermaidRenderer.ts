@@ -179,14 +179,17 @@ export function renderMermaid(source: string, maxWidth?: number): MermaidRenderR
  * (`toDOM`/`updateDOM`), so width-bucket changes only re-render diagrams in or near the viewport.
  */
 export class MermaidWidget extends WidgetType {
+    private readonly maxWidth: number | undefined;
+
     private renderedResult: MermaidRenderResult | null = null;
 
     public constructor(
         private readonly source: string,
         public readonly editOffset: number,
-        private readonly maxWidth?: number
+        maxWidth?: number
     ) {
         super();
+        this.maxWidth = normalizeMaxWidth(maxWidth);
     }
 
     private get result(): MermaidRenderResult {
@@ -226,8 +229,7 @@ export class MermaidWidget extends WidgetType {
     }
 
     public override get estimatedHeight(): number {
-        const result =
-            this.renderedResult ?? mermaidCache.peek(mermaidCacheKey(this.source, normalizeMaxWidth(this.maxWidth)));
+        const result = this.renderedResult ?? mermaidCache.peek(mermaidCacheKey(this.source, this.maxWidth));
         return result ? widgetHeight(result) : (lastKnownHeights.peek(this.source) ?? -1);
     }
 
