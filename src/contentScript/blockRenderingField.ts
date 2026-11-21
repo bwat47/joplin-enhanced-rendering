@@ -14,7 +14,7 @@ import {
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
 import { extractBlockMath, MathWidget, renderMath } from './mathRenderer';
-import { extractMermaidBlock, MermaidWidget, renderMermaid } from './mermaidRenderer';
+import { extractMermaidBlock, MermaidWidget } from './mermaidRenderer';
 import { getMermaidMaxWidth, hasMermaidMaxWidthChanged } from './mermaidWidth';
 import { getRevealSelection, hasRevealSelectionChanged, isReleasingFrozenSelection } from './pointerRevealFreeze';
 import { rangeIntersectsSelection } from './renderUtils';
@@ -150,11 +150,7 @@ function createBlockDecoration(
 
     const widget =
         kind === 'mermaid'
-            ? new MermaidWidget(
-                  source,
-                  mermaidMaxWidth !== null ? renderMermaid(source, mermaidMaxWidth) : renderMermaid(source),
-                  editOffset
-              )
+            ? new MermaidWidget(source, editOffset, mermaidMaxWidth ?? undefined)
             : new MathWidget(source, true, renderMath(source, true), editOffset);
     return Decoration.replace({ widget, block: true }).range(replaceFrom, replaceTo);
 }

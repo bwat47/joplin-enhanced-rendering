@@ -54,17 +54,17 @@ describe('blockRenderingField caching', () => {
     });
 
     it('keeps Mermaid render results across selection-only updates even past the 200-entry LRU limit', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const doc = buildMermaidDoc(210);
         let state = createState(doc, 0);
 
-        expect(renderSpy).toHaveBeenCalledTimes(210);
-        renderSpy.mockClear();
+        expect(widgetSpy).toHaveBeenCalledTimes(210);
+        widgetSpy.mockClear();
 
         // Moving the cursor within plain text should not scan or re-render any diagrams.
         state = state.update({ selection: { anchor: 5 } }).state;
         state = state.update({ selection: { anchor: doc.length } }).state;
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
 
         // Entering and leaving the first diagram (already evicted from the 200-entry LRU cache)
         // without editing should still reuse its cached block decoration.
@@ -74,11 +74,11 @@ describe('blockRenderingField caching', () => {
         state = state.update({ selection: { anchor: 0 } }).state;
         expect(countBlockDecorations(state)).toBe(210);
         expect(state.selection.main.head).toBe(0);
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
     });
 
     it('reuses a shared Mermaid render when leaving an initially revealed duplicate', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const prose = 'Plain prose before the diagrams.\n\n'.repeat(120);
         const diagram = '```mermaid\nflowchart LR\n  Alpha --> Beta\n```\n\n';
         // Put both copies beyond the initial parse and follow them with enough unique diagrams
@@ -87,39 +87,39 @@ describe('blockRenderingField caching', () => {
         let state = createState(doc, prose.length + diagram.indexOf('Alpha'));
 
         expect(countBlockDecorations(state)).toBe(211);
-        expect(renderSpy).toHaveBeenCalledTimes(211);
-        renderSpy.mockClear();
+        expect(widgetSpy).toHaveBeenCalledTimes(211);
+        widgetSpy.mockClear();
 
         state = state.update({ selection: { anchor: 0 } }).state;
         expect(countBlockDecorations(state)).toBe(212);
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
     });
 
     it('reuses unchanged block decorations when editing plain text past the 200-entry LRU limit', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const doc = buildMermaidDoc(210);
         let state = createState(doc, 0);
 
-        expect(renderSpy).toHaveBeenCalledTimes(210);
-        renderSpy.mockClear();
+        expect(widgetSpy).toHaveBeenCalledTimes(210);
+        widgetSpy.mockClear();
 
         state = state.update({
             changes: { from: 0, to: 0, insert: 'Edited ' },
             selection: { anchor: 7 },
         }).state;
         expect(state.doc.sliceString(0, 7)).toBe('Edited ');
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
     });
 
     it('retains cached renders across a partial-to-complete parse transition after a prose edit', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const doc = buildMermaidDoc(210);
         let state = createState(doc, 0);
 
         expect(syntaxTreeAvailable(state, state.doc.length)).toBe(true);
         expect(countBlockDecorations(state)).toBe(210);
-        expect(renderSpy).toHaveBeenCalledTimes(210);
-        renderSpy.mockClear();
+        expect(widgetSpy).toHaveBeenCalledTimes(210);
+        widgetSpy.mockClear();
 
         // Force Lezer's 20ms synchronous apply budget to expire mid-parse on a prose-only edit
         // above the diagrams so blockRenderingField observes a partial syntax tree.
@@ -140,7 +140,7 @@ describe('blockRenderingField caching', () => {
 
         expect(syntaxTreeAvailable(state, state.doc.length)).toBe(false);
         expect(countBlockDecorations(state)).toBeLessThan(210);
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
 
         // Finish parsing the full document and verify all 210 diagrams return from the field cache.
         ensureSyntaxTree(state, state.doc.length, 5000);
@@ -148,11 +148,11 @@ describe('blockRenderingField caching', () => {
 
         expect(syntaxTreeAvailable(state, state.doc.length)).toBe(true);
         expect(countBlockDecorations(state)).toBe(210);
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
     });
 
     it('evicts superseded renders in the parsed region even while the note stays partially parsed', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const tail = `\n\n${'Plain prose tail line.\n'.repeat(1000)}`;
         const doc = `Intro\n\n\`\`\`mermaid\nflowchart LR\n  Alpha --> Beta\n\`\`\`${tail}`;
 
@@ -165,7 +165,7 @@ describe('blockRenderingField caching', () => {
 
         expect(syntaxTreeAvailable(state, state.doc.length)).toBe(false);
         expect(countBlockDecorations(state)).toBe(1);
-        expect(renderSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
 
         // Edit Alpha -> Gamma and leave the block while the document stays partially parsed.
         const alphaPos = doc.indexOf('Alpha');
@@ -181,7 +181,7 @@ describe('blockRenderingField caching', () => {
         // Clear the global LRU cache and revert Gamma -> Alpha. Because the superseded Alpha
         // render was in the parsed region, it should have been evicted from the field cache.
         mermaidRenderer.clearMermaidRenderCache();
-        renderSpy.mockClear();
+        widgetSpy.mockClear();
 
         const gammaPos = state.doc.toString().indexOf('Gamma');
         state = state.update({ selection: { anchor: gammaPos } }).state;
@@ -193,12 +193,12 @@ describe('blockRenderingField caching', () => {
 
         expect(syntaxTreeAvailable(state, state.doc.length)).toBe(false);
         expect(countBlockDecorations(state)).toBe(1);
-        expect(renderSpy).toHaveBeenCalledTimes(1);
-        expect(renderSpy).toHaveBeenCalledWith('flowchart LR\n  Alpha --> Beta');
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledWith('flowchart LR\n  Alpha --> Beta', expect.any(Number), undefined);
     });
 
     it('evicts a replaced block even when the replacement extends past the parsed region', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const prefix = 'Prose before the block.\n\n'.repeat(140);
         const tail = 'Prose after the block.\n\n'.repeat(1000);
         const alpha = '```mermaid\nflowchart LR\n  Alpha --> Beta\n```\n\n';
@@ -224,7 +224,7 @@ describe('blockRenderingField caching', () => {
         expect(countBlockDecorations(state)).toBe(1);
 
         mermaidRenderer.clearMermaidRenderCache();
-        renderSpy.mockClear();
+        widgetSpy.mockClear();
         state = state.update({
             changes: { from: prefix.length, to: state.doc.length, insert: alpha + tail },
         }).state;
@@ -233,11 +233,15 @@ describe('blockRenderingField caching', () => {
 
         expect(syntaxTreeAvailable(state)).toBe(false);
         expect(countBlockDecorations(state)).toBe(1);
-        expect(renderSpy).toHaveBeenCalledExactlyOnceWith('flowchart LR\n  Alpha --> Beta');
+        expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(
+            'flowchart LR\n  Alpha --> Beta',
+            expect.any(Number),
+            undefined
+        );
     });
 
     it('evicts superseded renders past a fence with a pending language parser', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const doc = 'Intro\n\n```pending\nexample\n```\n\n```mermaid\nflowchart LR\n  Alpha --> Beta\n```';
         const pending = LanguageDescription.of({ name: 'pending', load: () => new Promise(() => {}) });
         let state = EditorState.create({
@@ -251,21 +255,25 @@ describe('blockRenderingField caching', () => {
         const from = doc.indexOf('Alpha');
         state = state.update({ changes: { from, to: from + 5, insert: 'Gamma' } }).state;
         expect(countBlockDecorations(state)).toBe(1);
-        expect(renderSpy).toHaveBeenLastCalledWith('flowchart LR\n  Gamma --> Beta');
+        expect(widgetSpy).toHaveBeenLastCalledWith('flowchart LR\n  Gamma --> Beta', expect.any(Number), undefined);
 
         mermaidRenderer.clearMermaidRenderCache();
-        renderSpy.mockClear();
+        widgetSpy.mockClear();
         state = state.update({ changes: { from, to: from + 5, insert: 'Alpha' } }).state;
 
         expect(syntaxTreeAvailable(state)).toBe(false);
         expect(countBlockDecorations(state)).toBe(1);
-        expect(renderSpy).toHaveBeenCalledExactlyOnceWith('flowchart LR\n  Alpha --> Beta');
+        expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(
+            'flowchart LR\n  Alpha --> Beta',
+            expect.any(Number),
+            undefined
+        );
     });
 
     it.each(['rendered', 'revealed', 'revealed during the first render'])(
         'retains a shared render outside the parsed region when the remaining copy was %s',
         (initialOccurrence) => {
-            const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+            const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
             const prose = 'Plain prose between blocks.\n\n'.repeat(160);
             const diagram = '```mermaid\nflowchart LR\n  Alpha --> Beta\n```\n\n';
             const secondBlockFrom = prose.length + diagram.length + prose.length;
@@ -274,14 +282,14 @@ describe('blockRenderingField caching', () => {
             const renderOnSelection = initialOccurrence === 'revealed during the first render';
             const anchor = initialOccurrence === 'rendered' ? 0 : firstBody;
             let state = createState(doc, anchor, renderOnSelection ? secondBlockFrom : anchor);
-            expect(renderSpy).toHaveBeenCalledTimes(renderOnSelection ? 0 : 1);
+            expect(widgetSpy).toHaveBeenCalledTimes(renderOnSelection ? 0 : 1);
             if (renderOnSelection) {
                 state = state.update({ selection: { anchor: firstBody } }).state;
             }
             expect(countBlockDecorations(state)).toBe(initialOccurrence === 'rendered' ? 2 : 1);
-            expect(renderSpy).toHaveBeenCalledTimes(1);
+            expect(widgetSpy).toHaveBeenCalledTimes(1);
             mermaidRenderer.clearMermaidRenderCache();
-            renderSpy.mockClear();
+            widgetSpy.mockClear();
 
             // Stop the synchronous parse before it reaches either occurrence of the diagram.
             let now = 1000;
@@ -303,17 +311,17 @@ describe('blockRenderingField caching', () => {
             state = state.update({ selection: { anchor: 0 } }).state;
             expect(syntaxTreeAvailable(state)).toBe(true);
             expect(countBlockDecorations(state)).toBe(1);
-            expect(renderSpy).not.toHaveBeenCalled();
+            expect(widgetSpy).not.toHaveBeenCalled();
         }
     );
 
     it('skips rendering a Mermaid block while editing inside it and renders once on leave', () => {
-        const renderSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const doc = 'Intro\n\n```mermaid\nflowchart LR\n  Alpha --> Beta\n```\n\nOutro';
         let state = createState(doc, 0);
 
-        expect(renderSpy).toHaveBeenCalledTimes(1);
-        renderSpy.mockClear();
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
+        widgetSpy.mockClear();
 
         const alphaPos = doc.indexOf('Alpha');
         state = state.update({ selection: { anchor: alphaPos } }).state;
@@ -321,12 +329,28 @@ describe('blockRenderingField caching', () => {
             changes: { from: alphaPos, to: alphaPos + 'Alpha'.length, insert: 'Gamma' },
             selection: { anchor: alphaPos + 'Gamma'.length },
         }).state;
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
 
         state = state.update({ selection: { anchor: 0 } }).state;
         expect(state.selection.main.head).toBe(0);
-        expect(renderSpy).toHaveBeenCalledTimes(1);
-        expect(renderSpy).toHaveBeenCalledWith('flowchart LR\n  Gamma --> Beta');
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledWith('flowchart LR\n  Gamma --> Beta', expect.any(Number), undefined);
+    });
+
+    it('builds Mermaid decorations without rendering until a view mounts them', () => {
+        const state = createState(buildMermaidDoc(3), 0);
+        const widgets: mermaidRenderer.MermaidWidget[] = [];
+        for (const source of state.facet(EditorView.decorations)) {
+            if (typeof source !== 'function') {
+                for (const iter = source.iter(); iter.value; iter.next()) {
+                    widgets.push((iter.value.spec as { widget: mermaidRenderer.MermaidWidget }).widget);
+                }
+            }
+        }
+
+        expect(widgets).toHaveLength(3);
+        // No render has happened, so neither the widget nor the shared cache knows a height yet.
+        expect(widgets.map((widget) => widget.estimatedHeight)).toEqual([-1, -1, -1]);
     });
 
     it('keeps BlockMath render results across selection-only updates', () => {

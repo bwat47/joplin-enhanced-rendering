@@ -1,5 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 
 import {
     clearMermaidRenderCache,
@@ -131,24 +132,60 @@ describe('renderMermaid', () => {
         expect(narrow.height).toBeGreaterThan(unconstrained.height);
     });
 
-    it('implements widget equality and height estimation', () => {
-        const smallSource = 'flowchart LR\n  A --> B';
-        const smallWide = renderMermaid(smallSource, 640);
-        const smallNarrow = renderMermaid(smallSource, 320);
-        const widgetA = new MermaidWidget(smallSource, smallWide, 11);
-        const widgetB = new MermaidWidget(smallSource, smallNarrow, 11);
-        const widgetC = new MermaidWidget('flowchart TD\n  A --> B', renderMermaid('flowchart TD\n  A --> B'), 11);
+    it('implements identity-based widget equality without rendering', () => {
+        const source = 'flowchart LR\n  A --> B';
+        const widget = new MermaidWidget(source, 11, 640);
 
-        // Identical rendered SVGs across width buckets stay equal so CM6 skips unnecessary DOM churn.
-        expect(widgetA.eq(widgetB)).toBe(true);
-        expect(widgetA.eq(widgetC)).toBe(false);
-        expect(widgetA.estimatedHeight).toBeGreaterThan(0);
-        expect(widgetA.ignoreEvent()).toBe(true);
+        expect(widget.eq(new MermaidWidget(source, 11, 640))).toBe(true);
+        expect(widget.eq(new MermaidWidget(source, 11, 320))).toBe(false);
+        expect(widget.eq(new MermaidWidget(source, 12, 640))).toBe(false);
+        expect(widget.eq(new MermaidWidget('flowchart TD\n  A --> B', 11, 640))).toBe(false);
+        expect(widget.ignoreEvent()).toBe(true);
+        // Equality checks must not render: the height is still unknown.
+        expect(widget.estimatedHeight).toBe(-1);
+    });
 
-        const wideSource =
-            'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record]';
-        const wideWidget = new MermaidWidget(wideSource, renderMermaid(wideSource, 640), 11);
-        const narrowWidget = new MermaidWidget(wideSource, renderMermaid(wideSource, 320), 11);
-        expect(wideWidget.eq(narrowWidget)).toBe(false);
+    it('defers rendering until toDOM and estimates heights from the last render at any width', () => {
+        const view = new EditorView({ parent: document.body });
+        try {
+            const source = 'flowchart LR\n  A --> B';
+            const wide = new MermaidWidget(source, 11, 640);
+            expect(wide.estimatedHeight).toBe(-1);
+
+            const dom = wide.toDOM(view);
+            expect(dom.querySelector('svg.pele')).not.toBeNull();
+            expect(wide.estimatedHeight).toBeGreaterThan(0);
+
+            // An unrendered widget at another width falls back to the last known height for its source.
+            expect(new MermaidWidget(source, 11, 320).estimatedHeight).toBe(wide.estimatedHeight);
+        } finally {
+            view.destroy();
+        }
+    });
+
+    it('keeps mounted DOM when a width change produces an identical SVG and swaps it otherwise', () => {
+        const view = new EditorView({ parent: document.body });
+        try {
+            const smallSource = 'flowchart LR\n  A --> B';
+            const smallWide = new MermaidWidget(smallSource, 11, 640);
+            const smallDom = smallWide.toDOM(view);
+            const smallSvg = smallDom.querySelector('svg');
+            expect(new MermaidWidget(smallSource, 11, 320).updateDOM(smallDom, view, smallWide)).toBe(true);
+            expect(smallDom.querySelector('svg')).toBe(smallSvg);
+
+            const wideSource =
+                'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record]';
+            const wideWidget = new MermaidWidget(wideSource, 11, 640);
+            const wideDom = wideWidget.toDOM(view);
+            const wideSvg = wideDom.querySelector('svg');
+            expect(new MermaidWidget(wideSource, 11, 320).updateDOM(wideDom, view, wideWidget)).toBe(true);
+            expect(wideDom.querySelector('svg')).not.toBe(wideSvg);
+            expect(wideDom.querySelectorAll('svg.pele')).toHaveLength(1);
+
+            // A different click target cannot be patched in place because the click handler captures it.
+            expect(new MermaidWidget(wideSource, 12, 320).updateDOM(wideDom, view, wideWidget)).toBe(false);
+        } finally {
+            view.destroy();
+        }
     });
 });

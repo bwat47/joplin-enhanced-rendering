@@ -146,37 +146,39 @@ describe('mermaidWidthExtension', () => {
     it('applies the initial measured width immediately and seeds subsequent editors without re-rendering', async () => {
         const doc =
             'Intro\n\n```mermaid\nflowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Finish]\n```\n\n$$\nx^2 + y^2\n$$';
-        const mermaidSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
         const mathSpy = vi.spyOn(mathRenderer, 'renderMath');
 
         const firstView = track(createView(doc, 380));
         expect(getMermaidMaxWidth(firstView.state)).toBeNull();
-        expect(mermaidSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
         expect(mathSpy).toHaveBeenCalledTimes(1);
 
         await flushMeasureCycle();
 
         expect(getMermaidMaxWidth(firstView.state)).toBe(320);
-        expect(mermaidSpy).toHaveBeenCalledTimes(2);
-        expect(mermaidSpy).toHaveBeenLastCalledWith(
+        expect(widgetSpy).toHaveBeenCalledTimes(2);
+        expect(widgetSpy).toHaveBeenLastCalledWith(
             'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Finish]',
+            expect.any(Number),
             320
         );
         // Math blocks must not re-render when Mermaid width changes.
         expect(mathSpy).toHaveBeenCalledTimes(1);
 
         // Opening a second editor at the same pane width starts directly in the seeded 320px bucket.
-        mermaidSpy.mockClear();
+        widgetSpy.mockClear();
         const secondView = track(createView(doc, 380));
         expect(getMermaidMaxWidth(secondView.state)).toBe(320);
-        expect(mermaidSpy).toHaveBeenCalledTimes(1);
-        expect(mermaidSpy).toHaveBeenCalledWith(
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledWith(
             'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Finish]',
+            expect.any(Number),
             320
         );
 
         await flushMeasureCycle();
-        expect(mermaidSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
     });
 
     it('debounces resize updates across buckets and cancels pending updates if width returns to the active bucket', async () => {
@@ -188,7 +190,7 @@ describe('mermaidWidthExtension', () => {
         const contentObserver = MockResizeObserver.instances.find((observer) => observer.observed.has(view.contentDOM));
         expect(contentObserver).toBeDefined();
 
-        const mermaidSpy = vi.spyOn(mermaidRenderer, 'renderMermaid');
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
 
         // Drag through 500px (448) -> 380px (320) within the debounce window.
         setElementClientWidth(view.contentDOM, 500);
@@ -196,23 +198,27 @@ describe('mermaidWidthExtension', () => {
         await flushMeasureCycle();
         vi.advanceTimersByTime(100);
         expect(getMermaidMaxWidth(view.state)).toBe(640);
-        expect(mermaidSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
 
         setElementClientWidth(view.contentDOM, 380);
         contentObserver!.trigger();
         await flushMeasureCycle();
         vi.advanceTimersByTime(100);
         expect(getMermaidMaxWidth(view.state)).toBe(640);
-        expect(mermaidSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
 
         // After debounce settles, only the final bucket (320) is applied once.
         vi.advanceTimersByTime(60);
         expect(getMermaidMaxWidth(view.state)).toBe(320);
-        expect(mermaidSpy).toHaveBeenCalledTimes(1);
-        expect(mermaidSpy).toHaveBeenCalledWith('flowchart LR\n  A[One] --> B[Two] --> C[Three] --> D[Four]', 320);
+        expect(widgetSpy).toHaveBeenCalledTimes(1);
+        expect(widgetSpy).toHaveBeenCalledWith(
+            'flowchart LR\n  A[One] --> B[Two] --> C[Three] --> D[Four]',
+            expect.any(Number),
+            320
+        );
 
         // Start resizing back to 700px, then return to 380px before debounce fires -> zero renders.
-        mermaidSpy.mockClear();
+        widgetSpy.mockClear();
         setElementClientWidth(view.contentDOM, 700);
         contentObserver!.trigger();
         await flushMeasureCycle();
@@ -224,7 +230,7 @@ describe('mermaidWidthExtension', () => {
         vi.advanceTimersByTime(200);
 
         expect(getMermaidMaxWidth(view.state)).toBe(320);
-        expect(mermaidSpy).not.toHaveBeenCalled();
+        expect(widgetSpy).not.toHaveBeenCalled();
     });
 
     it('uses the narrower scroll viewport width and still subtracts contentDOM horizontal padding on overflow', async () => {

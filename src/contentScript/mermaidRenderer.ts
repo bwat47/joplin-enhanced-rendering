@@ -27,6 +27,9 @@ const MERMAID_WIDGET_PADDING_PX = 16;
 const INFO_LANGUAGE_PATTERN = /^\s*(\S+)/;
 
 const mermaidCache = new LruCache<string, MermaidRenderResult>();
+// Last rendered widget height per source at any width, used to estimate off-screen diagrams
+// whose render at the current width has not happened yet.
+const lastKnownHeights = new LruCache<string, number>();
 
 let widgetInstanceCounter = 0;
 
@@ -35,6 +38,7 @@ let widgetInstanceCounter = 0;
  */
 export function clearMermaidRenderCache(): void {
     mermaidCache.clear();
+    lastKnownHeights.clear();
 }
 
 function getFenceChildren(node: SyntaxNodeRef): {
@@ -112,14 +116,25 @@ export function extractMermaidBlock(state: EditorState, node: SyntaxNodeRef): Me
     };
 }
 
+function normalizeMaxWidth(maxWidth: number | undefined): number | undefined {
+    return maxWidth !== undefined && Number.isFinite(maxWidth) && maxWidth > 0 ? Math.floor(maxWidth) : undefined;
+}
+
+function mermaidCacheKey(source: string, normalizedMaxWidth: number | undefined): string {
+    return normalizedMaxWidth === undefined ? source : `${normalizedMaxWidth}:${source}`;
+}
+
+function widgetHeight(result: MermaidRenderResult): number {
+    return result.ok ? Math.ceil(result.height) + MERMAID_WIDGET_PADDING_PX : -1;
+}
+
 /**
  * Renders Mermaid source to SVG synchronously via Pele, caching results by source text
  * and optional adaptive `maxWidth` constraint.
  */
 export function renderMermaid(source: string, maxWidth?: number): MermaidRenderResult {
-    const normalizedMaxWidth =
-        maxWidth !== undefined && Number.isFinite(maxWidth) && maxWidth > 0 ? Math.floor(maxWidth) : undefined;
-    const cacheKey = normalizedMaxWidth === undefined ? source : `${normalizedMaxWidth}:${source}`;
+    const normalizedMaxWidth = normalizeMaxWidth(maxWidth);
+    const cacheKey = mermaidCacheKey(source, normalizedMaxWidth);
     const cached = mermaidCache.get(cacheKey);
     if (cached) {
         return cached;
@@ -150,62 +165,93 @@ export function renderMermaid(source: string, maxWidth?: number): MermaidRenderR
     }
 
     mermaidCache.set(cacheKey, result);
+    lastKnownHeights.set(source, widgetHeight(result));
     return result;
 }
 
+/**
+ * Block widget for a Mermaid diagram. Rendering is deferred until CodeMirror mounts the widget
+ * (`toDOM`/`updateDOM`), so width-bucket changes only re-render diagrams in or near the viewport.
+ */
 export class MermaidWidget extends WidgetType {
+    private renderedResult: MermaidRenderResult | null = null;
+
     public constructor(
         private readonly source: string,
-        private readonly result: MermaidRenderResult,
-        public readonly editOffset: number
+        public readonly editOffset: number,
+        private readonly maxWidth?: number
     ) {
         super();
     }
 
+    private get result(): MermaidRenderResult {
+        this.renderedResult ??= renderMermaid(this.source, this.maxWidth);
+        return this.renderedResult;
+    }
+
+    /** Equality is identity-based so CodeMirror's document-wide decoration diff never forces a render. */
     public override eq(other: WidgetType): boolean {
-        if (
-            !(other instanceof MermaidWidget) ||
-            other.source !== this.source ||
-            other.editOffset !== this.editOffset ||
-            other.result.ok !== this.result.ok
-        ) {
+        return (
+            other instanceof MermaidWidget &&
+            other.source === this.source &&
+            other.editOffset === this.editOffset &&
+            other.maxWidth === this.maxWidth
+        );
+    }
+
+    /**
+     * Updates a mounted diagram in place after a width-bucket change. Keeps the existing DOM when the
+     * re-rendered SVG is identical, and declines (forcing `toDOM`) when the source or click target differs.
+     */
+    public override updateDOM(dom: HTMLElement, view: EditorView, from: MermaidWidget): boolean {
+        if (from.source !== this.source || from.editOffset !== this.editOffset) {
             return false;
         }
 
-        if (this.result.ok && other.result.ok) {
-            return this.result === other.result || this.result.svg === other.result.svg;
+        const previous = from.renderedResult;
+        const next = this.result;
+        if (previous?.ok && next.ok && previous.svg === next.svg) {
+            return true;
         }
 
+        dom.replaceChildren();
+        delete dom.dataset.renderError;
+        this.fillContainer(dom, view);
         return true;
     }
 
     public override get estimatedHeight(): number {
-        return this.result.ok ? Math.ceil(this.result.height) + MERMAID_WIDGET_PADDING_PX : -1;
+        const result =
+            this.renderedResult ?? mermaidCache.peek(mermaidCacheKey(this.source, normalizeMaxWidth(this.maxWidth)));
+        return result ? widgetHeight(result) : (lastKnownHeights.peek(this.source) ?? -1);
     }
 
     public override toDOM(view: EditorView): HTMLElement {
-        const doc = view.dom.ownerDocument;
-        const container = doc.createElement('div');
+        const container = view.dom.ownerDocument.createElement('div');
         container.className = 'cm-enhanced-rendering-block cm-enhanced-rendering-mermaid';
         container.setAttribute('role', 'region');
         container.setAttribute('aria-label', 'Rendered Mermaid diagram');
-
-        if (this.result.ok) {
-            const uniquePrefix = `er-m${++widgetInstanceCounter}-`;
-            container.innerHTML = this.result.svg.split(MERMAID_CACHE_SENTINEL).join(uniquePrefix);
-        } else {
-            container.dataset.renderError = 'true';
-            const errorBox = doc.createElement('div');
-            errorBox.className = 'cm-enhanced-rendering-error';
-            errorBox.textContent = `Mermaid syntax error: ${this.result.error}`;
-            container.appendChild(errorBox);
-        }
-
+        this.fillContainer(container, view);
         attachEditOnClick(container, view, this.editOffset);
         return container;
     }
 
     public override ignoreEvent(): boolean {
         return true;
+    }
+
+    private fillContainer(container: HTMLElement, view: EditorView): void {
+        const result = this.result;
+        if (result.ok) {
+            const uniquePrefix = `er-m${++widgetInstanceCounter}-`;
+            container.innerHTML = result.svg.split(MERMAID_CACHE_SENTINEL).join(uniquePrefix);
+            return;
+        }
+
+        container.dataset.renderError = 'true';
+        const errorBox = view.dom.ownerDocument.createElement('div');
+        errorBox.className = 'cm-enhanced-rendering-error';
+        errorBox.textContent = `Mermaid syntax error: ${result.error}`;
+        container.appendChild(errorBox);
     }
 }
