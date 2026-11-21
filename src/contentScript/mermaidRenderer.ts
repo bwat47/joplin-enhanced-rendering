@@ -113,10 +113,14 @@ export function extractMermaidBlock(state: EditorState, node: SyntaxNodeRef): Me
 }
 
 /**
- * Renders Mermaid source to SVG synchronously via Pele, caching results by source text.
+ * Renders Mermaid source to SVG synchronously via Pele, caching results by source text
+ * and optional adaptive `maxWidth` constraint.
  */
-export function renderMermaid(source: string): MermaidRenderResult {
-    const cached = mermaidCache.get(source);
+export function renderMermaid(source: string, maxWidth?: number): MermaidRenderResult {
+    const normalizedMaxWidth =
+        maxWidth !== undefined && Number.isFinite(maxWidth) && maxWidth > 0 ? Math.floor(maxWidth) : undefined;
+    const cacheKey = normalizedMaxWidth === undefined ? source : `${normalizedMaxWidth}:${source}`;
+    const cached = mermaidCache.get(cacheKey);
     if (cached) {
         return cached;
     }
@@ -129,6 +133,7 @@ export function renderMermaid(source: string): MermaidRenderResult {
             images: false,
             links: false,
             math: renderMermaidMath,
+            ...(normalizedMaxWidth !== undefined ? { maxWidth: normalizedMaxWidth } : {}),
         });
         result = {
             ok: true,
@@ -144,7 +149,7 @@ export function renderMermaid(source: string): MermaidRenderResult {
         result = { ok: false, error: message };
     }
 
-    mermaidCache.set(source, result);
+    mermaidCache.set(cacheKey, result);
     return result;
 }
 
@@ -158,12 +163,20 @@ export class MermaidWidget extends WidgetType {
     }
 
     public override eq(other: WidgetType): boolean {
-        return (
-            other instanceof MermaidWidget &&
-            other.source === this.source &&
-            other.editOffset === this.editOffset &&
-            other.result.ok === this.result.ok
-        );
+        if (
+            !(other instanceof MermaidWidget) ||
+            other.source !== this.source ||
+            other.editOffset !== this.editOffset ||
+            other.result.ok !== this.result.ok
+        ) {
+            return false;
+        }
+
+        if (this.result.ok && other.result.ok) {
+            return this.result === other.result || this.result.svg === other.result.svg;
+        }
+
+        return true;
     }
 
     public override get estimatedHeight(): number {

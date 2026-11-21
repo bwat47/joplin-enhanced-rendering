@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
 import { enhancedRenderingExtension } from './enhancedRendering';
+import { resetLastKnownMermaidWidth } from './mermaidWidth';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
 
 // Match Joplin's createEditor.ts, which disables Chrome EditContext and uses contenteditable.
@@ -62,6 +63,7 @@ describe('enhancedRenderingExtension (browser)', () => {
             view.dom.parentElement?.remove();
         }
         views = [];
+        resetLastKnownMermaidWidth();
     });
 
     it('renders a Pele Mermaid SVG with non-zero layout dimensions and supports click-to-edit', async () => {
@@ -267,5 +269,36 @@ describe('enhancedRenderingExtension (browser)', () => {
         const mathWidget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
         await userEvent.click(mathWidget);
         expect(view.state.selection.main.head).toBe(doc.indexOf('x = y + z'));
+    });
+
+    it('adapts wide Mermaid diagrams to narrow editor panes on resize', async () => {
+        const doc =
+            'Intro\n\n```mermaid\nflowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record] --> E[Send Notification]\n```\n\nFooter';
+        const view = track(createBrowserView(doc, 0));
+        const parent = view.dom.parentElement!;
+
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const wideSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
+        const wideWidth = Number(wideSvg.getAttribute('width'));
+        const wideHeight = Number(wideSvg.getAttribute('height'));
+        expect(wideWidth).toBeGreaterThan(wideHeight);
+
+        // Narrow the editor container and wait for the debounced width update.
+        parent.style.width = '360px';
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        const narrowSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
+        const narrowWidth = Number(narrowSvg.getAttribute('width'));
+        const narrowHeight = Number(narrowSvg.getAttribute('height'));
+        expect(narrowWidth).toBeLessThan(wideWidth);
+        expect(narrowHeight).toBeGreaterThan(narrowWidth);
+
+        // Widen back to desktop width and verify it returns to horizontal layout.
+        parent.style.width = '700px';
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        const restoredSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
+        expect(Number(restoredSvg.getAttribute('width'))).toBeGreaterThan(Number(restoredSvg.getAttribute('height')));
     });
 });

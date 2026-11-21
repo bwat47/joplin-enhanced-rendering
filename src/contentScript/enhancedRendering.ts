@@ -5,6 +5,7 @@ import 'katex/dist/katex.min.css';
 import type { CodeMirrorControl, MarkdownEditorContentScriptModule } from 'api/types';
 import { blockRenderingExtension } from './blockRenderingField';
 import { inlineMathPlugin } from './inlineMathPlugin';
+import { mermaidWidthExtension } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 
 /**
@@ -103,6 +104,7 @@ const enhancedRenderingTheme = EditorView.baseTheme({
 
 export const enhancedRenderingExtension: Extension = [
     pointerRevealFreezeExtension,
+    mermaidWidthExtension,
     blockRenderingExtension,
     inlineMathPlugin,
     enhancedRenderingTheme,

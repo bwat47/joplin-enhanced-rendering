@@ -114,15 +114,41 @@ describe('renderMermaid', () => {
         expect(result.svg).toContain('Done');
     });
 
-    it('implements widget equality and height estimation', () => {
-        const result = renderMermaid('flowchart LR\n  A --> B');
-        const widgetA = new MermaidWidget('flowchart LR\n  A --> B', result, 11);
-        const widgetB = new MermaidWidget('flowchart LR\n  A --> B', result, 11);
-        const widgetC = new MermaidWidget('flowchart TD\n  A --> B', result, 11);
+    it('adapts wide Mermaid diagrams to maxWidth and caches results per width bucket', () => {
+        const source =
+            'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record] --> E[Finish]';
+        const unconstrained = renderMermaid(source);
+        const narrow = renderMermaid(source, 320);
+        const narrowCached = renderMermaid(source, 320);
 
+        expect(unconstrained.ok).toBe(true);
+        expect(narrow.ok).toBe(true);
+        if (!unconstrained.ok || !narrow.ok) throw new Error('Expected Mermaid renders to succeed');
+
+        expect(narrow).toBe(narrowCached);
+        expect(narrow).not.toBe(unconstrained);
+        expect(narrow.width).toBeLessThan(unconstrained.width);
+        expect(narrow.height).toBeGreaterThan(unconstrained.height);
+    });
+
+    it('implements widget equality and height estimation', () => {
+        const smallSource = 'flowchart LR\n  A --> B';
+        const smallWide = renderMermaid(smallSource, 640);
+        const smallNarrow = renderMermaid(smallSource, 320);
+        const widgetA = new MermaidWidget(smallSource, smallWide, 11);
+        const widgetB = new MermaidWidget(smallSource, smallNarrow, 11);
+        const widgetC = new MermaidWidget('flowchart TD\n  A --> B', renderMermaid('flowchart TD\n  A --> B'), 11);
+
+        // Identical rendered SVGs across width buckets stay equal so CM6 skips unnecessary DOM churn.
         expect(widgetA.eq(widgetB)).toBe(true);
         expect(widgetA.eq(widgetC)).toBe(false);
         expect(widgetA.estimatedHeight).toBeGreaterThan(0);
         expect(widgetA.ignoreEvent()).toBe(true);
+
+        const wideSource =
+            'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record]';
+        const wideWidget = new MermaidWidget(wideSource, renderMermaid(wideSource, 640), 11);
+        const narrowWidget = new MermaidWidget(wideSource, renderMermaid(wideSource, 320), 11);
+        expect(wideWidget.eq(narrowWidget)).toBe(false);
     });
 });

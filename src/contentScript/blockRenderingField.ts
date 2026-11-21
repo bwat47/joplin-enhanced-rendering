@@ -15,10 +15,13 @@ import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
 import { extractBlockMath, MathWidget, renderMath } from './mathRenderer';
 import { extractMermaidBlock, MermaidWidget, renderMermaid } from './mermaidRenderer';
+import { getMermaidMaxWidth, hasMermaidMaxWidthChanged } from './mermaidWidth';
 import { getRevealSelection, hasRevealSelectionChanged, isReleasingFrozenSelection } from './pointerRevealFreeze';
 import { rangeIntersectsSelection } from './renderUtils';
 
 type BlockKind = 'mermaid' | 'math';
+
+const EMPTY_BLOCK_CACHE: ReadonlyMap<string, CachedBlockDecoration> = new Map();
 
 interface BlockEntry {
     readonly kind: BlockKind;
@@ -41,8 +44,14 @@ interface BlockRenderingState {
     readonly cache: ReadonlyMap<string, CachedBlockDecoration>;
 }
 
-function blockCacheKey(kind: BlockKind, editOffset: number, source: string): string {
-    return `${kind}:${editOffset}:${source}`;
+function mermaidCachePrefix(mermaidMaxWidth: number | null): string {
+    return `mermaid:${mermaidMaxWidth ?? 'auto'}:`;
+}
+
+function blockCacheKey(kind: BlockKind, editOffset: number, source: string, mermaidMaxWidth: number | null): string {
+    return kind === 'mermaid'
+        ? `${mermaidCachePrefix(mermaidMaxWidth)}${editOffset}:${source}`
+        : `${kind}:${editOffset}:${source}`;
 }
 
 function recordCachedDecoration(
@@ -65,15 +74,20 @@ function retainUnparsedCacheEntries(
     parsedTo: number,
     docLength: number,
     previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    changes: ChangeDesc | null
+    changes: ChangeDesc | null,
+    mermaidMaxWidth: number | null
 ): Map<string, CachedBlockDecoration> {
     const retained = new Map<string, CachedBlockDecoration>();
     if (parsedTo >= docLength) {
         return retained;
     }
 
+    const activeMermaidPrefix = mermaidCachePrefix(mermaidMaxWidth);
     // The outer Markdown tree can cover a block even when an earlier fenced language was skipped.
     for (const [key, entry] of previousCache) {
+        if (key.startsWith('mermaid:') && !key.startsWith(activeMermaidPrefix)) {
+            continue;
+        }
         for (const to of entry.ends) {
             // Keep the endpoint attached to the block's last character, including at insertions.
             const mappedTo = changes ? changes.mapPos(to, -1, MapMode.TrackBefore) : to;
@@ -86,9 +100,22 @@ function retainUnparsedCacheEntries(
     return retained;
 }
 
+function retainNonMermaidCacheEntries(
+    previousCache: ReadonlyMap<string, CachedBlockDecoration>
+): Map<string, CachedBlockDecoration> {
+    const retained = new Map<string, CachedBlockDecoration>();
+    for (const [key, entry] of previousCache) {
+        if (!key.startsWith('mermaid:')) {
+            retained.set(key, entry);
+        }
+    }
+    return retained;
+}
+
 function recordRevealedBlockOccurrences(
     blocks: readonly BlockEntry[],
     cache: Map<string, CachedBlockDecoration> | null,
+    mermaidMaxWidth: number | null,
     previousCache?: ReadonlyMap<string, CachedBlockDecoration>
 ): void {
     if (!cache) {
@@ -99,7 +126,7 @@ function recordRevealedBlockOccurrences(
         if (block.decoration) {
             continue;
         }
-        const key = blockCacheKey(block.kind, block.editOffset, block.source);
+        const key = blockCacheKey(block.kind, block.editOffset, block.source, mermaidMaxWidth);
         const cached = cache.get(key);
         // A duplicate can acquire a shared render after this occurrence was processed.
         if (cached && !cached.ends.has(block.replaceTo)) {
@@ -114,6 +141,7 @@ function createBlockDecoration(
     replaceFrom: number,
     replaceTo: number,
     editOffset: number,
+    mermaidMaxWidth: number | null,
     cached?: Decoration
 ): Range<Decoration> {
     if (cached) {
@@ -122,7 +150,11 @@ function createBlockDecoration(
 
     const widget =
         kind === 'mermaid'
-            ? new MermaidWidget(source, renderMermaid(source), editOffset)
+            ? new MermaidWidget(
+                  source,
+                  mermaidMaxWidth !== null ? renderMermaid(source, mermaidMaxWidth) : renderMermaid(source),
+                  editOffset
+              )
             : new MathWidget(source, true, renderMath(source, true), editOffset);
     return Decoration.replace({ widget, block: true }).range(replaceFrom, replaceTo);
 }
@@ -134,14 +166,17 @@ function createBlockEntry(
     replaceTo: number,
     editOffset: number,
     revealSelection: EditorSelection,
+    mermaidMaxWidth: number | null,
     previousCache: ReadonlyMap<string, CachedBlockDecoration>,
     nextCache: Map<string, CachedBlockDecoration>
 ): BlockEntry {
-    const key = blockCacheKey(kind, editOffset, source);
+    const key = blockCacheKey(kind, editOffset, source, mermaidMaxWidth);
     const rendered = !rangeIntersectsSelection(revealSelection, replaceFrom, replaceTo);
     const reused = (nextCache.get(key) ?? previousCache.get(key))?.decoration;
     const decoration =
-        rendered || reused ? createBlockDecoration(kind, source, replaceFrom, replaceTo, editOffset, reused) : null;
+        rendered || reused
+            ? createBlockDecoration(kind, source, replaceFrom, replaceTo, editOffset, mermaidMaxWidth, reused)
+            : null;
 
     if (decoration) {
         recordCachedDecoration(nextCache, key, decoration.value, replaceTo);
@@ -158,8 +193,15 @@ function buildBlockState(
     const blocks: BlockEntry[] = [];
     const activeDecorations: Range<Decoration>[] = [];
     const revealSelection = getRevealSelection(state);
+    const mermaidMaxWidth = getMermaidMaxWidth(state);
     const tree = syntaxTree(state);
-    const nextCache = retainUnparsedCacheEntries(tree.length, state.doc.length, previousCache, changes);
+    const nextCache = retainUnparsedCacheEntries(
+        tree.length,
+        state.doc.length,
+        previousCache,
+        changes,
+        mermaidMaxWidth
+    );
 
     tree.iterate({
         enter(node) {
@@ -173,6 +215,7 @@ function buildBlockState(
                         block.replaceTo,
                         block.editOffset,
                         revealSelection,
+                        mermaidMaxWidth,
                         previousCache,
                         nextCache
                     );
@@ -194,6 +237,7 @@ function buildBlockState(
                         expr.replaceTo,
                         expr.editOffset,
                         revealSelection,
+                        mermaidMaxWidth,
                         previousCache,
                         nextCache
                     );
@@ -209,7 +253,7 @@ function buildBlockState(
         },
     });
 
-    recordRevealedBlockOccurrences(blocks, nextCache);
+    recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth);
 
     return {
         blocks,
@@ -221,9 +265,10 @@ function buildBlockState(
 function resolveBlockDecoration(
     block: BlockEntry,
     previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    nextCache: Map<string, CachedBlockDecoration> | null
+    nextCache: Map<string, CachedBlockDecoration> | null,
+    mermaidMaxWidth: number | null
 ): { decoration: Range<Decoration>; nextCache: Map<string, CachedBlockDecoration> | null } {
-    const key = blockCacheKey(block.kind, block.editOffset, block.source);
+    const key = blockCacheKey(block.kind, block.editOffset, block.source, mermaidMaxWidth);
     const cached = (nextCache ?? previousCache).get(key);
     const decoration = createBlockDecoration(
         block.kind,
@@ -231,6 +276,7 @@ function resolveBlockDecoration(
         block.replaceFrom,
         block.replaceTo,
         block.editOffset,
+        mermaidMaxWidth,
         cached?.decoration
     );
     if (!cached?.ends.has(block.replaceTo)) {
@@ -240,9 +286,68 @@ function resolveBlockDecoration(
     return { decoration, nextCache };
 }
 
+function updateMathBlockForWidth(
+    block: BlockEntry,
+    revealSelection: EditorSelection,
+    previousCache: ReadonlyMap<string, CachedBlockDecoration>,
+    nextCache: Map<string, CachedBlockDecoration>,
+    mermaidMaxWidth: number | null
+): BlockEntry {
+    const shouldRender = !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo);
+    let decoration = block.decoration;
+    if (shouldRender && !decoration) {
+        ({ decoration } = resolveBlockDecoration(block, previousCache, nextCache, mermaidMaxWidth));
+    }
+
+    return shouldRender === block.rendered && decoration === block.decoration
+        ? block
+        : { ...block, decoration, rendered: shouldRender };
+}
+
+function updateBlockStateForMermaidWidth(
+    previous: BlockRenderingState,
+    revealSelection: EditorSelection,
+    mermaidMaxWidth: number | null
+): BlockRenderingState {
+    const nextCache = retainNonMermaidCacheEntries(previous.cache);
+    const blocks: BlockEntry[] = [];
+    const activeDecorations: Range<Decoration>[] = [];
+
+    for (const block of previous.blocks) {
+        const entry =
+            block.kind === 'mermaid'
+                ? createBlockEntry(
+                      'mermaid',
+                      block.source,
+                      block.replaceFrom,
+                      block.replaceTo,
+                      block.editOffset,
+                      revealSelection,
+                      mermaidMaxWidth,
+                      EMPTY_BLOCK_CACHE,
+                      nextCache
+                  )
+                : updateMathBlockForWidth(block, revealSelection, previous.cache, nextCache, mermaidMaxWidth);
+
+        blocks.push(entry);
+        if (entry.rendered && entry.decoration) {
+            activeDecorations.push(entry.decoration);
+        }
+    }
+
+    recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth, previous.cache);
+
+    return {
+        blocks,
+        decorations: Decoration.set(activeDecorations, true),
+        cache: nextCache,
+    };
+}
+
 function updateBlockStateForSelection(
     previous: BlockRenderingState,
-    revealSelection: EditorSelection
+    revealSelection: EditorSelection,
+    mermaidMaxWidth: number | null
 ): BlockRenderingState {
     let changed = false;
     for (const block of previous.blocks) {
@@ -266,7 +371,7 @@ function updateBlockStateForSelection(
         let decoration = block.decoration;
         if (shouldRender) {
             if (!decoration) {
-                ({ decoration, nextCache } = resolveBlockDecoration(block, previous.cache, nextCache));
+                ({ decoration, nextCache } = resolveBlockDecoration(block, previous.cache, nextCache, mermaidMaxWidth));
             }
             activeDecorations.push(decoration);
         }
@@ -278,7 +383,7 @@ function updateBlockStateForSelection(
         }
     }
 
-    recordRevealedBlockOccurrences(blocks, nextCache, previous.cache);
+    recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth, previous.cache);
 
     return {
         blocks,
@@ -302,8 +407,13 @@ const blockRenderingField = StateField.define<BlockRenderingState>({
             return buildBlockState(transaction.state, value.cache, transaction.docChanged ? transaction.changes : null);
         }
 
+        const mermaidMaxWidth = getMermaidMaxWidth(transaction.state);
+        if (hasMermaidMaxWidthChanged(transaction.startState, transaction.state)) {
+            return updateBlockStateForMermaidWidth(value, getRevealSelection(transaction.state), mermaidMaxWidth);
+        }
+
         if (hasRevealSelectionChanged(transaction.startState, transaction.state)) {
-            return updateBlockStateForSelection(value, getRevealSelection(transaction.state));
+            return updateBlockStateForSelection(value, getRevealSelection(transaction.state), mermaidMaxWidth);
         }
 
         return value;
