@@ -94,6 +94,17 @@ describe('quantizeMermaidWidth', () => {
         expect(quantizeMermaidWidth(721)).toBe(640);
         expect(quantizeMermaidWidth(722)).toBe(704);
     });
+
+    it('requires headroom before growing into a larger bucket but shrinks immediately', () => {
+        // Inner width = content width - 18px of block chrome.
+        expect(quantizeMermaidWidth(722, 640)).toBe(640); // 704 inner: 0px above 704
+        expect(quantizeMermaidWidth(745, 640)).toBe(640); // 727 inner: 23px above 704
+        expect(quantizeMermaidWidth(746, 640)).toBe(704); // 728 inner: 24px above 704
+        expect(quantizeMermaidWidth(745, 320)).toBe(640); // Multi-step growth stops one step short.
+        expect(quantizeMermaidWidth(721, 704)).toBe(640); // Shrinking ignores hysteresis.
+        expect(quantizeMermaidWidth(722, 704)).toBe(704);
+        expect(quantizeMermaidWidth(745, null)).toBe(704); // No active bucket: plain quantization.
+    });
 });
 
 describe('mermaidWidthExtension', () => {
@@ -230,6 +241,25 @@ describe('mermaidWidthExtension', () => {
         vi.advanceTimersByTime(200);
 
         expect(getMermaidMaxWidth(view.state)).toBe(320);
+        expect(widgetSpy).not.toHaveBeenCalled();
+    });
+
+    it('does not flip buckets when a re-render toggles the vertical scrollbar', async () => {
+        const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A[One] --> B[Two] --> C[Three] --> D[Four]\n```';
+        const view = track(createView(doc, 721));
+        await flushMeasureCycle();
+        expect(getMermaidMaxWidth(view.state)).toBe(640);
+
+        const contentObserver = MockResizeObserver.instances.find((observer) => observer.observed.has(view.contentDOM));
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
+
+        // The vertical scrollbar disappears, widening the pane by 17px (703 -> 720 inner): not enough to grow.
+        setElementClientWidth(view.contentDOM, 738);
+        contentObserver!.trigger();
+        await flushMeasureCycle();
+        vi.advanceTimersByTime(200);
+
+        expect(getMermaidMaxWidth(view.state)).toBe(640);
         expect(widgetSpy).not.toHaveBeenCalled();
     });
 
