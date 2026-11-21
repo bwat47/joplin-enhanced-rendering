@@ -16,9 +16,7 @@ export interface MermaidBlock {
     source: string;
 }
 
-export type MermaidRenderResult =
-    | { ok: true; svg: string; width: number; height: number }
-    | { ok: false; error: string };
+type MermaidRenderResult = { ok: true; svg: string; width: number; height: number } | { ok: false; error: string };
 
 const MERMAID_CACHE_SENTINEL = '__joplin_er_pele_id__';
 const MERMAID_WIDGET_PADDING_PX = 16;
@@ -144,7 +142,7 @@ function renderResultsEqual(previous: MermaidRenderResult | null, next: MermaidR
  * Renders Mermaid source to SVG synchronously via Pele, caching results by source text
  * and optional adaptive `maxWidth` constraint.
  */
-export function renderMermaid(source: string, maxWidth?: number): MermaidRenderResult {
+function renderMermaid(source: string, maxWidth?: number): MermaidRenderResult {
     const normalizedMaxWidth = normalizeMaxWidth(maxWidth);
     const cacheKey = mermaidCacheKey(source, normalizedMaxWidth);
     const cached = mermaidCache.get(cacheKey);
