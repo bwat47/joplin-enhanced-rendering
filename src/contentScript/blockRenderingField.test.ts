@@ -1,12 +1,13 @@
 import { markdown } from '@codemirror/lang-markdown';
 import { ensureSyntaxTree, LanguageDescription, syntaxTree, syntaxTreeAvailable } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
-import { EditorView } from '@codemirror/view';
+import { EditorView, type Decoration, type WidgetType } from '@codemirror/view';
 import { vi } from 'vitest';
 
 import { blockRenderingExtension } from './blockRenderingField';
 import * as mathRenderer from './mathRenderer';
 import * as mermaidRenderer from './mermaidRenderer';
+import { mermaidWidthExtension, resetLastKnownMermaidWidth, setMermaidMaxWidthEffect } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
 
@@ -20,6 +21,41 @@ function createState(doc: string, anchor = 0, head = anchor): EditorState {
     // Apply an empty transaction so blockRenderingField observes the completed syntax tree,
     // matching CodeMirror's background parse update in a live EditorView.
     return state.update({}).state;
+}
+
+function createWidthAwareState(doc: string, anchor = 0): EditorState {
+    const state = EditorState.create({
+        doc,
+        selection: { anchor },
+        extensions: [
+            createJoplinMarkdownExtension(),
+            pointerRevealFreezeExtension,
+            mermaidWidthExtension,
+            blockRenderingExtension,
+        ],
+    });
+    ensureSyntaxTree(state, doc.length, 5000);
+    return state.update({}).state;
+}
+
+function setWidth(state: EditorState, width: number | null): EditorState {
+    return state.update({ effects: setMermaidMaxWidthEffect.of(width) }).state;
+}
+
+function collectBlockDecorations(state: EditorState): Decoration[] {
+    const decorations: Decoration[] = [];
+    for (const source of state.facet(EditorView.decorations)) {
+        if (typeof source !== 'function') {
+            for (const iter = source.iter(); iter.value; iter.next()) {
+                decorations.push(iter.value);
+            }
+        }
+    }
+    return decorations;
+}
+
+function widgetOf(decoration: Decoration): WidgetType {
+    return (decoration.spec as { widget: WidgetType }).widget;
 }
 
 function countBlockDecorations(state: EditorState): number {
@@ -368,5 +404,90 @@ describe('blockRenderingField caching', () => {
 
         expect(state.selection.main.head).toBe(doc.length);
         expect(renderSpy).not.toHaveBeenCalled();
+    });
+});
+
+describe('blockRenderingField Mermaid width changes', () => {
+    const mermaidSource = 'flowchart LR\n  Alpha --> Beta';
+    const doc = `Intro\n\n\`\`\`mermaid\n${mermaidSource}\n\`\`\`\n\n$$\nx^2 + y^2 = z^2\n$$\n\nOutro`;
+
+    beforeEach(() => {
+        resetLastKnownMermaidWidth();
+        mermaidRenderer.clearMermaidRenderCache();
+        mathRenderer.clearMathRenderCache();
+    });
+
+    afterEach(() => {
+        vi.restoreAllMocks();
+    });
+
+    it('recreates Mermaid widgets at the new width while reusing math decorations', () => {
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
+        const renderMathSpy = vi.spyOn(mathRenderer, 'renderMath');
+        const before = setWidth(createWidthAwareState(doc), 640);
+        const beforeMath = collectBlockDecorations(before).find(
+            (decoration) => widgetOf(decoration) instanceof mathRenderer.MathWidget
+        );
+        expect(beforeMath).toBeDefined();
+        widgetSpy.mockClear();
+        renderMathSpy.mockClear();
+
+        const after = setWidth(before, 512);
+        const decorations = collectBlockDecorations(after);
+
+        expect(decorations).toHaveLength(2);
+        expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(mermaidSource, expect.any(Number), 512);
+        expect(decorations).toContain(beforeMath);
+        expect(renderMathSpy).not.toHaveBeenCalled();
+
+        // The pre-change state stays usable: revealing and leaving its math block reuses its own cache.
+        const mathPos = doc.indexOf('x^2');
+        const branched = before
+            .update({ selection: { anchor: mathPos } })
+            .state.update({ selection: { anchor: 0 } }).state;
+        expect(collectBlockDecorations(branched)).toContain(beforeMath);
+        expect(renderMathSpy).not.toHaveBeenCalled();
+    });
+
+    it('keeps a revealed Mermaid block revealed across a width change and renders it at the new width on leave', () => {
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
+        const alphaPos = doc.indexOf('Alpha');
+        let state = setWidth(createWidthAwareState(doc, alphaPos), 640);
+        expect(countBlockDecorations(state)).toBe(1);
+        widgetSpy.mockClear();
+
+        state = setWidth(state, 512);
+        expect(countBlockDecorations(state)).toBe(1);
+        expect(widgetSpy).not.toHaveBeenCalled();
+
+        state = state.update({ selection: { anchor: 0 } }).state;
+        expect(countBlockDecorations(state)).toBe(2);
+        expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(mermaidSource, expect.any(Number), 512);
+    });
+
+    it('applies a width change combined with a document edit in one transaction', () => {
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
+        let state = setWidth(createWidthAwareState(doc), 640);
+        widgetSpy.mockClear();
+
+        state = state.update({
+            changes: { from: 0, insert: 'Edited ' },
+            effects: setMermaidMaxWidthEffect.of(512),
+        }).state;
+
+        expect(countBlockDecorations(state)).toBe(2);
+        expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(mermaidSource, expect.any(Number), 512);
+    });
+
+    it('drops cached Mermaid decorations for the previous width', () => {
+        const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
+        let state = setWidth(createWidthAwareState(doc), 640);
+        state = setWidth(state, 512);
+        widgetSpy.mockClear();
+
+        state = setWidth(state, 640);
+
+        expect(countBlockDecorations(state)).toBe(2);
+        expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(mermaidSource, expect.any(Number), 640);
     });
 });

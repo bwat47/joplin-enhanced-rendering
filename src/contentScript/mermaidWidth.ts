@@ -13,7 +13,11 @@ const RESIZE_DEBOUNCE_MS = 150;
  */
 const GROW_HYSTERESIS_PX = 24;
 
-const setMermaidMaxWidthEffect = StateEffect.define<number | null>();
+/**
+ * Sets the active Mermaid width bucket. Dispatched by the width plugin after measuring; exported so
+ * state-only tests can drive width changes without a mounted view.
+ */
+export const setMermaidMaxWidthEffect = StateEffect.define<number | null>();
 
 let lastKnownWidthBucket: number | null = null;
 
