@@ -128,6 +128,18 @@ function widgetHeight(result: MermaidRenderResult): number {
     return result.ok ? Math.ceil(result.height) + MERMAID_WIDGET_PADDING_PX : -1;
 }
 
+function renderResultsEqual(previous: MermaidRenderResult | null, next: MermaidRenderResult): boolean {
+    if (!previous) {
+        return false;
+    }
+
+    if (previous.ok && next.ok) {
+        return previous.svg === next.svg;
+    }
+
+    return !previous.ok && !next.ok && previous.error === next.error;
+}
+
 /**
  * Renders Mermaid source to SVG synchronously via Pele, caching results by source text
  * and optional adaptive `maxWidth` constraint.
@@ -216,9 +228,7 @@ export class MermaidWidget extends WidgetType {
             return false;
         }
 
-        const previous = from.renderedResult;
-        const next = this.result;
-        if (previous?.ok && next.ok && previous.svg === next.svg) {
+        if (renderResultsEqual(from.renderedResult, this.result)) {
             return true;
         }
 

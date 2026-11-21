@@ -201,6 +201,14 @@ describe('renderMermaid', () => {
 
             // A different click target cannot be patched in place because the click handler captures it.
             expect(new MermaidWidget(wideSource, 12, 320).updateDOM(wideDom, view, wideWidget)).toBe(false);
+
+            const invalidSource = 'not-a-valid-diagram-type ???';
+            const errorWide = new MermaidWidget(invalidSource, 11, 640);
+            const errorDom = errorWide.toDOM(view);
+            const errorBox = errorDom.querySelector('.cm-enhanced-rendering-error');
+            expect(errorBox).not.toBeNull();
+            expect(new MermaidWidget(invalidSource, 11, 320).updateDOM(errorDom, view, errorWide)).toBe(true);
+            expect(errorDom.querySelector('.cm-enhanced-rendering-error')).toBe(errorBox);
         } finally {
             view.destroy();
         }
