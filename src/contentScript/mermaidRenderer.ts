@@ -137,6 +137,9 @@ export function renderMermaid(source: string, maxWidth?: number): MermaidRenderR
     const cacheKey = mermaidCacheKey(source, normalizedMaxWidth);
     const cached = mermaidCache.get(cacheKey);
     if (cached) {
+        if (cached.ok) {
+            lastKnownHeights.set(source, widgetHeight(cached));
+        }
         return cached;
     }
 
@@ -165,7 +168,9 @@ export function renderMermaid(source: string, maxWidth?: number): MermaidRenderR
     }
 
     mermaidCache.set(cacheKey, result);
-    lastKnownHeights.set(source, widgetHeight(result));
+    if (result.ok) {
+        lastKnownHeights.set(source, widgetHeight(result));
+    }
     return result;
 }
 

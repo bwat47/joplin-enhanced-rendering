@@ -158,6 +158,20 @@ describe('renderMermaid', () => {
 
             // An unrendered widget at another width falls back to the last known height for its source.
             expect(new MermaidWidget(source, 11, 320).estimatedHeight).toBe(wide.estimatedHeight);
+
+            // Re-rendering a wide diagram at a cached width updates the fallback height for unrendered buckets.
+            const wrappingSource =
+                'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record]';
+            const wideResult = renderMermaid(wrappingSource, 640);
+            const narrowResult = renderMermaid(wrappingSource, 320);
+            expect(wideResult.ok && narrowResult.ok && narrowResult.height > wideResult.height).toBe(true);
+            const expectedWideHeight = new MermaidWidget(wrappingSource, 11, 640).estimatedHeight;
+            const expectedNarrowHeight = new MermaidWidget(wrappingSource, 11, 320).estimatedHeight;
+            expect(new MermaidWidget(wrappingSource, 11, 704).estimatedHeight).toBe(expectedNarrowHeight);
+
+            // Hitting the 640px cache refreshes the last known height back to the wide layout.
+            expect(renderMermaid(wrappingSource, 640)).toBe(wideResult);
+            expect(new MermaidWidget(wrappingSource, 11, 704).estimatedHeight).toBe(expectedWideHeight);
         } finally {
             view.destroy();
         }
