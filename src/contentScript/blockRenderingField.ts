@@ -338,6 +338,8 @@ function updateBlockStateForMermaidWidth(
         }
     }
 
+    // Math entries in `nextCache` are shared with `previous.cache`; passing it lets
+    // `recordCachedDecoration` copy them before adding ends instead of mutating previous state.
     recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth, previous.cache);
 
     return {
