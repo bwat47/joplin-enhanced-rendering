@@ -22,7 +22,7 @@ const enhancedRenderingTheme = EditorView.baseTheme({
         display: 'block',
         boxSizing: 'border-box',
         margin: '0',
-        padding: '0.6em 0.5em',
+        padding: '0.6em 8px',
         border: '1px solid transparent',
         borderRadius: '4px',
         textAlign: 'center',

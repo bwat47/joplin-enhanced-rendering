@@ -91,8 +91,8 @@ describe('quantizeMermaidWidth', () => {
         expect(quantizeMermaidWidth(360)).toBe(320);
         expect(quantizeMermaidWidth(400)).toBe(320);
         expect(quantizeMermaidWidth(700)).toBe(640);
-        expect(quantizeMermaidWidth(723)).toBe(640);
-        expect(quantizeMermaidWidth(724)).toBe(704);
+        expect(quantizeMermaidWidth(721)).toBe(640);
+        expect(quantizeMermaidWidth(722)).toBe(704);
     });
 });
 
