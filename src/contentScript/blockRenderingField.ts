@@ -282,22 +282,29 @@ function resolveBlockDecoration(
     return { decoration, nextCache };
 }
 
-function updateMathBlockForWidth(
+/**
+ * Applies `revealSelection` to an existing block: rendered blocks get a decoration (reused from
+ * the cache when possible) and revealed blocks keep theirs for later reuse. Returns the original
+ * entry when nothing changed. `nextCache` is created lazily from `previousCache` on first write.
+ */
+function updateBlockForSelection(
     block: BlockEntry,
     revealSelection: EditorSelection,
     previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    nextCache: Map<string, CachedBlockDecoration>,
+    nextCache: Map<string, CachedBlockDecoration> | null,
     mermaidMaxWidth: number | null
-): BlockEntry {
+): { entry: BlockEntry; nextCache: Map<string, CachedBlockDecoration> | null } {
     const shouldRender = !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo);
     let decoration = block.decoration;
     if (shouldRender && !decoration) {
-        ({ decoration } = resolveBlockDecoration(block, previousCache, nextCache, mermaidMaxWidth));
+        ({ decoration, nextCache } = resolveBlockDecoration(block, previousCache, nextCache, mermaidMaxWidth));
     }
 
-    return shouldRender === block.rendered && decoration === block.decoration
-        ? block
-        : { ...block, decoration, rendered: shouldRender };
+    const entry =
+        shouldRender === block.rendered && decoration === block.decoration
+            ? block
+            : { ...block, decoration, rendered: shouldRender };
+    return { entry, nextCache };
 }
 
 function updateBlockStateForMermaidWidth(
@@ -323,7 +330,7 @@ function updateBlockStateForMermaidWidth(
                       EMPTY_BLOCK_CACHE,
                       nextCache
                   )
-                : updateMathBlockForWidth(block, revealSelection, previous.cache, nextCache, mermaidMaxWidth);
+                : updateBlockForSelection(block, revealSelection, previous.cache, nextCache, mermaidMaxWidth).entry;
 
         blocks.push(entry);
         if (entry.rendered && entry.decoration) {
@@ -363,19 +370,17 @@ function updateBlockStateForSelection(
     let nextCache: Map<string, CachedBlockDecoration> | null = null;
 
     for (const block of previous.blocks) {
-        const shouldRender = !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo);
-        let decoration = block.decoration;
-        if (shouldRender) {
-            if (!decoration) {
-                ({ decoration, nextCache } = resolveBlockDecoration(block, previous.cache, nextCache, mermaidMaxWidth));
-            }
-            activeDecorations.push(decoration);
-        }
-
-        if (shouldRender === block.rendered && decoration === block.decoration) {
-            blocks.push(block);
-        } else {
-            blocks.push({ ...block, decoration, rendered: shouldRender });
+        let entry: BlockEntry;
+        ({ entry, nextCache } = updateBlockForSelection(
+            block,
+            revealSelection,
+            previous.cache,
+            nextCache,
+            mermaidMaxWidth
+        ));
+        blocks.push(entry);
+        if (entry.rendered && entry.decoration) {
+            activeDecorations.push(entry.decoration);
         }
     }
 
