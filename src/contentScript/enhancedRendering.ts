@@ -5,7 +5,7 @@ import 'katex/dist/katex.min.css';
 import type { CodeMirrorControl, MarkdownEditorContentScriptModule } from 'api/types';
 import { blockRenderingExtension } from './blockRenderingField';
 import { inlineMathPlugin } from './inlineMathPlugin';
-import { mermaidWidthExtension } from './mermaidWidth';
+import { BLOCK_BORDER_WIDTH_PX, BLOCK_HORIZONTAL_PADDING_PX, mermaidWidthExtension } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 
 /**
@@ -22,8 +22,8 @@ const enhancedRenderingTheme = EditorView.baseTheme({
         display: 'block',
         boxSizing: 'border-box',
         margin: '0',
-        padding: '0.6em 8px',
-        border: '1px solid transparent',
+        padding: `0.6em ${BLOCK_HORIZONTAL_PADDING_PX}px`,
+        border: `${BLOCK_BORDER_WIDTH_PX}px solid transparent`,
         borderRadius: '4px',
         textAlign: 'center',
         overflowX: 'auto',

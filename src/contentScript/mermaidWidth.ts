@@ -3,8 +3,11 @@ import { ViewPlugin, type EditorView, type PluginValue } from '@codemirror/view'
 
 const WIDTH_BUCKET_STEP_PX = 64;
 const MIN_MERMAID_WIDTH_PX = 256;
-// Matches `.cm-enhanced-rendering-block` horizontal padding (8px each side) plus 1px borders.
-const MERMAID_HORIZONTAL_CHROME_PX = 18;
+/** Horizontal padding on each side of `.cm-enhanced-rendering-block`, shared with the editor theme. */
+export const BLOCK_HORIZONTAL_PADDING_PX = 8;
+/** Border width of `.cm-enhanced-rendering-block`, shared with the editor theme. */
+export const BLOCK_BORDER_WIDTH_PX = 1;
+const MERMAID_HORIZONTAL_CHROME_PX = 2 * (BLOCK_HORIZONTAL_PADDING_PX + BLOCK_BORDER_WIDTH_PX);
 const RESIZE_DEBOUNCE_MS = 150;
 
 const setMermaidMaxWidthEffect = StateEffect.define<number | null>();
