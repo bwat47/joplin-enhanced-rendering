@@ -1,5 +1,5 @@
 import { StateEffect, StateField, type EditorState, type Extension, type Transaction } from '@codemirror/state';
-import { ViewPlugin, type EditorView, type PluginValue, type ViewUpdate } from '@codemirror/view';
+import { ViewPlugin, type EditorView, type PluginValue } from '@codemirror/view';
 
 const WIDTH_BUCKET_STEP_PX = 64;
 const MIN_MERMAID_WIDTH_PX = 256;
@@ -112,13 +112,17 @@ class MermaidWidthPlugin implements PluginValue {
 
     private readonly resizeObserver: ResizeObserver | null;
 
+    private readonly lastObservedWidths = new Map<Element, number>();
+
     private readonly measureKey = {};
 
     public constructor(private readonly view: EditorView) {
         const win = view.dom.ownerDocument.defaultView;
         if (win?.ResizeObserver) {
-            this.resizeObserver = new win.ResizeObserver(() => {
-                this.scheduleMeasure();
+            this.resizeObserver = new win.ResizeObserver((entries) => {
+                if (this.hasObservedWidthChanged(entries)) {
+                    this.scheduleMeasure();
+                }
             });
             this.resizeObserver.observe(view.scrollDOM);
             this.resizeObserver.observe(view.contentDOM);
@@ -129,20 +133,23 @@ class MermaidWidthPlugin implements PluginValue {
         this.scheduleMeasure();
     }
 
-    public update(update: ViewUpdate): void {
-        if (this.resizeObserver === null && update.geometryChanged) {
-            queueMicrotask(() => {
-                if (!this.destroyed) {
-                    this.scheduleMeasure();
-                }
-            });
-        }
-    }
-
     public destroy(): void {
         this.destroyed = true;
         this.resizeObserver?.disconnect();
+        this.lastObservedWidths.clear();
         this.cancelPending();
+    }
+
+    private hasObservedWidthChanged(entries: readonly ResizeObserverEntry[]): boolean {
+        let widthChanged = false;
+        for (const entry of entries) {
+            const width = entry.contentRect.width;
+            if (this.lastObservedWidths.get(entry.target) !== width) {
+                this.lastObservedWidths.set(entry.target, width);
+                widthChanged = true;
+            }
+        }
+        return widthChanged;
     }
 
     private cancelPending(): void {

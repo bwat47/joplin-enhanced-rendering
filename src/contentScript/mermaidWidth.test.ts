@@ -40,7 +40,11 @@ class MockResizeObserver {
 
     public trigger(): void {
         if (!this.disconnected) {
-            this.callback([], this);
+            const entries = Array.from(this.observed, (target) => ({
+                target,
+                contentRect: { width: target.clientWidth },
+            })) as unknown as ResizeObserverEntry[];
+            this.callback(entries, this);
         }
     }
 }
@@ -230,6 +234,31 @@ describe('mermaidWidthExtension', () => {
         await flushMeasureCycle();
 
         expect(getMermaidMaxWidth(view.state)).toBe(320);
+    });
+
+    it('ignores height-only ResizeObserver callbacks without re-measuring', async () => {
+        const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A --> B\n```';
+        const view = track(createView(doc, 700));
+        await flushMeasureCycle();
+
+        const contentObserver = MockResizeObserver.instances.find((observer) => observer.observed.has(view.contentDOM));
+        expect(contentObserver).toBeDefined();
+
+        // First trigger establishes the baseline observed widths.
+        contentObserver!.trigger();
+        await flushMeasureCycle();
+
+        const requestMeasureSpy = vi.spyOn(view, 'requestMeasure');
+
+        // Repeated triggers with unchanged widths (e.g. height changes while typing) skip measurement.
+        contentObserver!.trigger();
+        contentObserver!.trigger();
+        expect(requestMeasureSpy).not.toHaveBeenCalled();
+
+        // Changing width schedules a measurement again.
+        setElementClientWidth(view.contentDOM, 400);
+        contentObserver!.trigger();
+        expect(requestMeasureSpy).toHaveBeenCalledTimes(1);
     });
 
     it('disconnects its ResizeObserver and cancels pending timers when destroyed', async () => {
