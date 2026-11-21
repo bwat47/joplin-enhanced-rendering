@@ -1,10 +1,12 @@
 import { cursorDocEnd, cursorDocStart, cursorLineDown, cursorLineUp } from '@codemirror/commands';
+import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, rectangularSelection } from '@codemirror/view';
 import { afterEach, describe, expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
 import { enhancedRenderingExtension } from './enhancedRendering';
+import { clearMermaidRenderCache, MermaidWidget } from './mermaidRenderer';
 import { resetLastKnownMermaidWidth } from './mermaidWidth';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
 
@@ -63,6 +65,7 @@ describe('enhancedRenderingExtension (browser)', () => {
             view.dom.parentElement?.remove();
         }
         views = [];
+        clearMermaidRenderCache();
         resetLastKnownMermaidWidth();
     });
 
@@ -306,21 +309,50 @@ describe('enhancedRenderingExtension (browser)', () => {
         const chain = 'A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Persist Record]';
         const filler = 'Filler prose line.\n\n'.repeat(400);
         const doc = `Intro\n\n\`\`\`mermaid\nflowchart LR\n  ${chain}\n\`\`\`\n\n${filler}\`\`\`mermaid\nflowchart LR\n  ${chain} --> E[Bottom]\n\`\`\`\n\nEnd`;
-        const view = track(createBrowserView(doc, doc.length));
-        view.dom.style.height = '300px';
+        const view = track(
+            createBrowserView(doc, 0, [
+                EditorView.theme({
+                    '&': { height: '300px' },
+                    '& .cm-scroller': { overflow: 'auto' },
+                }),
+            ])
+        );
         const nextFrames = (): Promise<void> =>
             new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
-        await nextFrames();
+        const getMermaidWidgets = (): MermaidWidget[] => {
+            const widgets: MermaidWidget[] = [];
+            for (const source of view.state.facet(EditorView.decorations)) {
+                if (typeof source !== 'function') {
+                    for (const iter = source.iter(); iter.value; iter.next()) {
+                        const widget = (iter.value.spec as { widget?: unknown }).widget;
+                        if (widget instanceof MermaidWidget) {
+                            widgets.push(widget);
+                        }
+                    }
+                }
+            }
+            return widgets;
+        };
 
-        // Cursor at end keeps the bottom diagram revealed; move it to the top so both would render.
-        view.dispatch({ selection: { anchor: 0 }, scrollIntoView: true });
+        // Complete parsing so both Mermaid blocks have decorations even while the bottom one is off-screen.
+        ensureSyntaxTree(view.state, doc.length, 5000);
+        view.dispatch({});
         await nextFrames();
+        const initialWidgets = getMermaidWidgets();
+        expect(initialWidgets).toHaveLength(2);
         expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(1);
+        expect(initialWidgets[0]!.estimatedHeight).toBeGreaterThan(0);
+        // The off-screen diagram has a decoration, but has not been rendered yet.
+        expect(initialWidgets[1]!.estimatedHeight).toBe(-1);
 
-        // Narrow the pane: only the mounted diagram re-renders; the off-screen one has no DOM yet.
+        // Narrow the pane: only the mounted diagram re-renders; the off-screen one stays unrendered.
         view.dom.parentElement!.style.width = '360px';
         await new Promise((resolve) => setTimeout(resolve, 300));
+        const narrowedWidgets = getMermaidWidgets();
+        expect(narrowedWidgets).toHaveLength(2);
         expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(1);
+        expect(narrowedWidgets[0]!.estimatedHeight).toBeGreaterThan(0);
+        expect(narrowedWidgets[1]!.estimatedHeight).toBe(-1);
 
         view.dispatch({ effects: EditorView.scrollIntoView(doc.length - 'End'.length, { y: 'end' }) });
         await nextFrames();
@@ -329,6 +361,7 @@ describe('enhancedRenderingExtension (browser)', () => {
             view.dom.querySelectorAll<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')
         ).find((svg) => svg.textContent.includes('Bottom'));
         expect(bottomSvg).toBeDefined();
+        expect(narrowedWidgets[1]!.estimatedHeight).toBeGreaterThan(0);
         // Rendered lazily at the narrow width, so the long LR chain wraps into a taller layout.
         expect(Number(bottomSvg!.getAttribute('height'))).toBeGreaterThan(Number(bottomSvg!.getAttribute('width')));
     });
