@@ -31,7 +31,7 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 
 ### Renderers & Caching
 
-- **Mermaid (`mermaidRenderer.ts`)**: Synchronously renders diagrams to responsive SVGs via Pele (with external images/links disabled for safety) and displays inline error widgets on invalid syntax.
+- **Mermaid (`mermaidRenderer.ts`, `mermaidWidth.ts`)**: Synchronously renders diagrams to responsive SVGs via Pele (with external images/links disabled for safety) and shows inline error widgets on invalid syntax. An editor-level width tracker quantizes and debounces the available width into coarse `maxWidth` buckets (reused across note switches) so narrow panes and mobile viewports get adaptive layouts without resize thrashing. Widgets render lazily when mounted, so width changes only re-render visible diagrams and keep the existing DOM when the SVG is unchanged.
 - **Math (`mathRenderer.ts`)**: Synchronously renders LaTeX via KaTeX (with untrusted commands disabled) and also provides math rendering for `$$...$$` labels inside Mermaid diagrams.
 - **Caching**: Both renderers use bounded LRU caches, and the block field reuses widget decorations when block content hasn't changed.
 
@@ -45,6 +45,7 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 | `src/contentScript/inlineMathPlugin.ts`    | Viewport-scoped `ViewPlugin` for inline `$...$` math widgets.                            |
 | `src/contentScript/pointerRevealFreeze.ts` | Freezes reveal/collapse state during pointer drag gestures.                              |
 | `src/contentScript/mermaidRenderer.ts`     | Mermaid extraction, Pele SVG rendering, and `MermaidWidget`.                             |
+| `src/contentScript/mermaidWidth.ts`        | Editor-level quantized, debounced width tracker feeding Pele's adaptive `maxWidth`.      |
 | `src/contentScript/mathRenderer.ts`        | Math extraction, KaTeX rendering, Mermaid math integration, and `MathWidget`.            |
 | `src/contentScript/renderUtils.ts`         | Shared LRU cache, selection intersection checks, click-to-edit, and indentation helpers. |
 | `src/logger.ts`                            | Logging wrapper.                                                                         |

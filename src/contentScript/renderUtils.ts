@@ -20,6 +20,11 @@ export class LruCache<K, V> {
         return value;
     }
 
+    /** Reads a value without refreshing its recency. */
+    public peek(key: K): V | undefined {
+        return this.entries.get(key);
+    }
+
     public set(key: K, value: V): void {
         if (this.entries.has(key)) {
             this.entries.delete(key);
