@@ -1,12 +1,10 @@
 import { StateEffect, StateField, type EditorState, type Extension, type Transaction } from '@codemirror/state';
 import { ViewPlugin, type EditorView, type PluginValue } from '@codemirror/view';
 
+import { BLOCK_BORDER_WIDTH_PX, BLOCK_HORIZONTAL_PADDING_PX } from './blockStyle';
+
 const WIDTH_BUCKET_STEP_PX = 64;
 const MIN_MERMAID_WIDTH_PX = 256;
-/** Horizontal padding on each side of `.cm-enhanced-rendering-block`, shared with the editor theme. */
-export const BLOCK_HORIZONTAL_PADDING_PX = 8;
-/** Border width of `.cm-enhanced-rendering-block`, shared with the editor theme. */
-export const BLOCK_BORDER_WIDTH_PX = 1;
 const MERMAID_HORIZONTAL_CHROME_PX = 2 * (BLOCK_HORIZONTAL_PADDING_PX + BLOCK_BORDER_WIDTH_PX);
 const RESIZE_DEBOUNCE_MS = 150;
 /**
