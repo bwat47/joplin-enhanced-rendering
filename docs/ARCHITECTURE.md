@@ -31,7 +31,7 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 
 ### Renderers & Caching
 
-- **Mermaid (`mermaidRenderer.ts`, `mermaidWidth.ts`)**: Synchronously renders diagrams to responsive SVGs via Pele (with external images/links disabled for safety) and displays inline error widgets on invalid syntax. An editor-level width tracker quantizes and debounces the available content width into coarse `maxWidth` buckets so narrow panes and mobile viewports get adaptive Pele layouts without per-widget observers or resize thrashing.
+- **Mermaid (`mermaidRenderer.ts`, `mermaidWidth.ts`)**: Synchronously renders diagrams to responsive SVGs via Pele (with external images/links disabled for safety) and displays inline error widgets on invalid syntax. An editor-level width tracker quantizes and debounces the available content width into coarse `maxWidth` buckets so narrow panes and mobile viewports get adaptive Pele layouts without per-widget observers or resize thrashing. Because `StateField.create()` runs before `EditorView` has a DOM box, the first editor in a session (or a secondary window with a different pane width) renders once at its initial/seeded bucket and adjusts on mount; subsequent note switches reuse the last observed width bucket immediately, and diagrams whose SVG does not change avoid DOM replacement via `MermaidWidget.eq()`.
 - **Math (`mathRenderer.ts`)**: Synchronously renders LaTeX via KaTeX (with untrusted commands disabled) and also provides math rendering for `$$...$$` labels inside Mermaid diagrams.
 - **Caching**: Both renderers use bounded LRU caches, and the block field reuses widget decorations when block content hasn't changed.
 
