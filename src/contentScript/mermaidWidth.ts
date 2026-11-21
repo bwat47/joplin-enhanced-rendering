@@ -64,17 +64,10 @@ export function hasMermaidMaxWidthChanged(startState: EditorState, nextState: Ed
     return getMermaidMaxWidth(startState) !== getMermaidMaxWidth(nextState);
 }
 
-function measureContentInnerWidth(contentDOM: HTMLElement): number {
-    const clientWidth = contentDOM.clientWidth;
-    if (clientWidth <= 0) {
-        return 0;
-    }
-
-    const win = contentDOM.ownerDocument.defaultView;
-    const style = win?.getComputedStyle(contentDOM);
-    const horizontalPadding =
-        (parseFloat(style?.paddingLeft ?? '') || 0) + (parseFloat(style?.paddingRight ?? '') || 0);
-    return Math.max(0, clientWidth - horizontalPadding);
+function measureHorizontalPadding(element: HTMLElement): number {
+    const win = element.ownerDocument.defaultView;
+    const style = win?.getComputedStyle(element);
+    return (parseFloat(style?.paddingLeft ?? '') || 0) + (parseFloat(style?.paddingRight ?? '') || 0);
 }
 
 function measureScrollViewportWidth(scrollDOM: HTMLElement): number {
@@ -89,16 +82,20 @@ function measureScrollViewportWidth(scrollDOM: HTMLElement): number {
 }
 
 function measureEditorAvailableWidth(view: EditorView): number {
-    const contentWidth = measureContentInnerWidth(view.contentDOM);
+    const contentWidth = view.contentDOM.clientWidth;
     const viewportWidth = measureScrollViewportWidth(view.scrollDOM);
+    const outerWidth =
+        contentWidth > 0 && viewportWidth > 0
+            ? // `.cm-content` expands past `.cm-scroller` when wide diagrams or unwrapped lines overflow,
+              // while centered editor themes can make `.cm-content` narrower than `.cm-scroller`.
+              Math.min(contentWidth, viewportWidth)
+            : Math.max(contentWidth, viewportWidth);
 
-    if (contentWidth > 0 && viewportWidth > 0) {
-        // `.cm-content` expands past `.cm-scroller` when wide diagrams or unwrapped lines overflow,
-        // while centered editor themes can make `.cm-content` narrower than `.cm-scroller`.
-        return Math.min(contentWidth, viewportWidth);
+    if (outerWidth <= 0) {
+        return 0;
     }
 
-    return Math.max(contentWidth, viewportWidth);
+    return Math.max(0, outerWidth - measureHorizontalPadding(view.contentDOM));
 }
 
 class MermaidWidthPlugin implements PluginValue {

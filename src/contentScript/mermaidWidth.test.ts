@@ -227,12 +227,15 @@ describe('mermaidWidthExtension', () => {
         expect(mermaidSpy).not.toHaveBeenCalled();
     });
 
-    it('uses the narrower scroll viewport width when contentDOM overflows horizontally', async () => {
+    it('uses the narrower scroll viewport width and still subtracts contentDOM horizontal padding on overflow', async () => {
         const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A[One] --> B[Two] --> C[Three] --> D[Four]\n```';
         const view = track(createView(doc, 870));
-        setElementClientWidth(view.scrollDOM, 380);
+        setElementClientWidth(view.scrollDOM, 420);
+        view.contentDOM.style.paddingLeft = '32px';
+        view.contentDOM.style.paddingRight = '32px';
         await flushMeasureCycle();
 
+        // 420 viewport - 64 content padding = 356 available -> 320px bucket (without padding subtraction it would be 384).
         expect(getMermaidMaxWidth(view.state)).toBe(320);
     });
 
