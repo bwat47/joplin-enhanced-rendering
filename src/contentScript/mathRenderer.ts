@@ -226,6 +226,39 @@ export function renderMath(tex: string, displayMode: boolean): MathRenderResult 
     return result;
 }
 
+/**
+ * Wraps the last line of a tagged display equation and its `.katex-tag` in a grid row.
+ *
+ * KaTeX positions the tag absolutely at the right edge of `.katex-html`, so a wide equation
+ * scrolls underneath the tag and the tag aligns with the whole equation rather than its last line.
+ * Moving the tag out of `.katex-html`'s direct children disables that rule; the grid then keeps the
+ * equation centered, places the tag after it, and lets both overflow and scroll together.
+ *
+ * Expects KaTeX's display markup: `.katex-html > (.katex-base | .katex-newline)* .katex-tag`.
+ * Assumes KaTeX's `leqno` and `fleqn` options are off; the grid always centers the equation and
+ * puts the tag on the right.
+ */
+function groupTaggedLine(container: HTMLElement): void {
+    const html = container.querySelector('.katex-display > .katex > .katex-html');
+    const tag = html?.lastElementChild;
+    if (!html || !tag?.classList.contains('katex-tag')) {
+        return;
+    }
+
+    const equation = container.ownerDocument.createElement('span');
+    equation.className = 'cm-enhanced-rendering-tagged-equation';
+    let part = tag.previousElementSibling;
+    while (part && !part.classList.contains('katex-newline')) {
+        equation.prepend(part);
+        part = tag.previousElementSibling;
+    }
+
+    const taggedLine = container.ownerDocument.createElement('span');
+    taggedLine.className = 'cm-enhanced-rendering-tagged-line';
+    taggedLine.append(equation, tag);
+    html.append(taggedLine);
+}
+
 export class MathWidget extends WidgetType {
     public constructor(
         private readonly tex: string,
@@ -259,6 +292,9 @@ export class MathWidget extends WidgetType {
 
         if (this.result.ok) {
             container.innerHTML = this.result.html;
+            if (this.displayMode) {
+                groupTaggedLine(container);
+            }
         } else {
             container.dataset.renderError = 'true';
             const errorEl = doc.createElement(this.displayMode ? 'div' : 'span');

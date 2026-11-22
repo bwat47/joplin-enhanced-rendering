@@ -57,8 +57,38 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '&.cm-editor .cm-enhanced-rendering-math .katex, &.cm-editor .cm-enhanced-rendering-math-block .katex': {
         fontFamily: "KaTeX_Main, 'Times New Roman', serif",
     },
+    /*
+     * `contain: inline-size` decouples the math widget's intrinsic width from its contents so wide
+     * expressions scroll inside the widget instead of expanding `.cm-content` when the editor has
+     * no `max-width` cap (e.g. Joplin mobile and unlimited-width desktop).
+     */
+    '.cm-enhanced-rendering-math-block': {
+        width: '100%',
+        contain: 'inline-size',
+    },
     '.cm-enhanced-rendering-math-block .katex-display': {
         margin: '0',
+    },
+    // Equal side columns center short equations. A wide equation and its tag can overflow together.
+    // The row spans the block's visible width, not the scrolled width of wider earlier lines, so
+    // a short final line keeps its tag at the visible right edge before horizontal scrolling.
+    '.cm-enhanced-rendering-tagged-line': {
+        display: 'grid',
+        gridTemplateColumns: '1fr max-content 1fr',
+        alignItems: 'baseline',
+    },
+    '.cm-enhanced-rendering-tagged-line > .cm-enhanced-rendering-tagged-equation': {
+        gridColumn: '2',
+    },
+    '.cm-enhanced-rendering-tagged-line > .katex-tag': {
+        gridColumn: '3',
+        justifySelf: 'end',
+        marginInlineStart: '1em',
+    },
+    // KaTeX sizes this strut for an absolutely positioned tag using the tallest part of the equation.
+    // Grid aligns the tag by its baseline, so the strut would add extra height to shorter final lines.
+    '.cm-enhanced-rendering-tagged-line > .katex-tag > .katex-strut': {
+        display: 'none',
     },
     '.cm-enhanced-rendering-error': {
         display: 'inline-block',

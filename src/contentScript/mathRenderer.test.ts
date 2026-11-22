@@ -1,5 +1,6 @@
 import { syntaxTree } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
 
 import {
     clearMathRenderCache,
@@ -106,6 +107,46 @@ describe('renderMath', () => {
         expect(widgetA.eq(widgetB)).toBe(true);
         expect(widgetA.eq(widgetC)).toBe(false);
         expect(widgetA.ignoreEvent()).toBe(true);
+    });
+});
+
+describe('MathWidget tagged display math', () => {
+    const renderBlock = (tex: string): HTMLElement => {
+        const view = new EditorView({ parent: document.createElement('div') });
+        const element = new MathWidget(tex, true, renderMath(tex, true), 3).toDOM(view);
+        view.destroy();
+        return element;
+    };
+
+    const childClasses = (element: Element): string[] => Array.from(element.children, (child) => child.className);
+
+    beforeEach(() => {
+        clearMathRenderCache();
+    });
+
+    // Guards against KaTeX markup changes: grouping silently no-ops if the expected structure changes.
+    it('groups only the final line with its tag', () => {
+        const html = renderBlock(String.raw`a \newline b + c \tag{1}`).querySelector('.katex-html')!;
+        expect(childClasses(html)).toEqual(['katex-base', 'mspace katex-newline', 'cm-enhanced-rendering-tagged-line']);
+
+        const taggedLine = html.lastElementChild!;
+        expect(childClasses(taggedLine)).toEqual(['cm-enhanced-rendering-tagged-equation', 'katex-tag']);
+        expect(childClasses(taggedLine.firstElementChild!).every((name) => name === 'katex-base')).toBe(true);
+        expect(taggedLine.lastElementChild!.textContent).toBe('(1)');
+    });
+
+    it('leaves an empty equation cell when the tag follows a trailing line break', () => {
+        const taggedLine = renderBlock(String.raw`a \newline \tag{1}`).querySelector(
+            '.cm-enhanced-rendering-tagged-line'
+        )!;
+        expect(taggedLine.firstElementChild!.children).toHaveLength(0);
+        expect(taggedLine.lastElementChild!.className).toBe('katex-tag');
+    });
+
+    it('leaves untagged equations unchanged', () => {
+        const element = renderBlock('x^2 + y^2');
+        expect(element.querySelector('.cm-enhanced-rendering-tagged-line')).toBeNull();
+        expect(childClasses(element.querySelector('.katex-html')!).every((name) => name === 'katex-base')).toBe(true);
     });
 });
 

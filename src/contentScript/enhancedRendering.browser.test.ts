@@ -28,6 +28,11 @@ const joplinThemeOverrides = EditorView.theme({
     },
 });
 
+/** Waits two animation frames so CodeMirror measure/update cycles and widget callbacks settle. */
+function nextFrames(): Promise<void> {
+    return new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
+}
+
 function createBrowserView(doc: string, cursorPos = 0, extraExtensions: Extension[] = []): EditorView {
     const parent = document.createElement('div');
     parent.style.width = '700px';
@@ -190,7 +195,7 @@ describe('enhancedRenderingExtension (browser)', () => {
 
         // Scroll deep past dozens of rendered block widgets.
         view.scrollDOM.scrollTop = 4000;
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await nextFrames();
 
         const scrollerRect = view.scrollDOM.getBoundingClientRect();
         const visibleTextLines = Array.from(view.contentDOM.querySelectorAll<HTMLElement>('.cm-line')).filter((el) => {
@@ -242,7 +247,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(view.dom.querySelector('.cm-enhanced-rendering-math')).not.toBeNull();
 
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await nextFrames();
 
         // After mouseup, both expand to raw Markdown while keeping the dragged selection.
         expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
@@ -280,7 +285,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const view = track(createBrowserView(doc, 0));
         const parent = view.dom.parentElement!;
 
-        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        await nextFrames();
 
         const wideSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
         const wideWidth = Number(wideSvg.getAttribute('width'));
@@ -317,8 +322,6 @@ describe('enhancedRenderingExtension (browser)', () => {
                 }),
             ])
         );
-        const nextFrames = (): Promise<void> =>
-            new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())));
         const getMermaidWidgets = (): MermaidWidget[] => {
             const widgets: MermaidWidget[] = [];
             for (const source of view.state.facet(EditorView.decorations)) {
@@ -364,5 +367,185 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(narrowedWidgets[1]!.estimatedHeight).toBeGreaterThan(0);
         // Rendered lazily at the narrow width, so the long LR chain wraps into a taller layout.
         expect(Number(bottomSvg!.getAttribute('height'))).toBeGreaterThan(Number(bottomSvg!.getAttribute('width')));
+    });
+
+    it('scrolls wide display math inside the block widget without expanding the editor or shifting other math on narrow viewports', async () => {
+        const longMath =
+            '$$\n' +
+            'a_1+a_2+a_3+a_4+a_5+a_6+a_7+a_8+a_9+a_{10}\n' +
+            '+a_{11}+a_{12}+a_{13}+a_{14}+a_{15}\n' +
+            '+a_{16}+a_{17}+a_{18}+a_{19}+a_{20}\n' +
+            '$$';
+        const shortMath = '$$\nx^2 + y^2 = z^2\n$$';
+        const filler = 'Filler line.\n\n'.repeat(120);
+        const doc = `Top\n\n${shortMath}\n\n${filler}Before long:\n\n${shortMath}\n\nVery long horizontal expression:\n\n${longMath}\n\nEnd`;
+
+        const view = track(
+            createBrowserView(doc, 0, [
+                EditorView.lineWrapping,
+                EditorView.theme({
+                    '&': { height: '400px' },
+                    '& .cm-scroller': { overflow: 'auto' },
+                }),
+            ])
+        );
+        view.dom.parentElement!.style.width = '360px';
+
+        await nextFrames();
+
+        const initialContentWidth = view.contentDOM.getBoundingClientRect().width;
+        expect(initialContentWidth).toBeLessThanOrEqual(360);
+
+        const topShortBlock = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        const topShortBase = topShortBlock.querySelector<HTMLElement>('.katex-html .katex-base')!;
+        const topShortCenterX =
+            topShortBase.getBoundingClientRect().left + topShortBase.getBoundingClientRect().width / 2;
+
+        // Scroll the wide expression (and the second short expression above it) into view.
+        ensureSyntaxTree(view.state, doc.length, 5000);
+        view.dispatch({ effects: EditorView.scrollIntoView(doc.length - 'End'.length, { y: 'end' }) });
+        await nextFrames();
+
+        const mathBlocks = Array.from(view.dom.querySelectorAll<HTMLElement>('.cm-enhanced-rendering-math-block'));
+        expect(mathBlocks.length).toBeGreaterThanOrEqual(2);
+        const bottomShortBlock = mathBlocks[mathBlocks.length - 2]!;
+        const longBlock = mathBlocks[mathBlocks.length - 1]!;
+
+        // Editor width must stay bounded to the viewport instead of expanding to fit the wide formula.
+        expect(view.contentDOM.getBoundingClientRect().width).toBeLessThanOrEqual(360);
+        expect(view.scrollDOM.scrollWidth).toBe(view.scrollDOM.clientWidth);
+
+        // The wide display math block itself should overflow horizontally and be scrollable.
+        expect(longBlock.getBoundingClientRect().width).toBeLessThanOrEqual(360);
+        expect(longBlock.scrollWidth).toBeGreaterThan(longBlock.clientWidth);
+
+        // The start of the overflowing expression must remain reachable (not clipped off the left edge).
+        const firstTerm = longBlock.querySelector<HTMLElement>('.katex-html .katex-base')!;
+        expect(firstTerm.getBoundingClientRect().left).toBeGreaterThanOrEqual(longBlock.getBoundingClientRect().left);
+
+        // Scrolling the block horizontally reaches the trailing terms without scrolling the editor.
+        longBlock.scrollLeft = longBlock.scrollWidth;
+        expect(longBlock.scrollLeft).toBeGreaterThan(0);
+        expect(view.scrollDOM.scrollLeft).toBe(0);
+
+        // Other centered display math expressions must stay centered in the viewport, not shift right.
+        const bottomShortBase = bottomShortBlock.querySelector<HTMLElement>('.katex-html .katex-base')!;
+        const bottomShortCenterX =
+            bottomShortBase.getBoundingClientRect().left + bottomShortBase.getBoundingClientRect().width / 2;
+        expect(Math.abs(bottomShortCenterX - topShortCenterX)).toBeLessThan(2);
+    });
+
+    it('keeps tags beside their equations when display math scrolls', async () => {
+        const longFormula = Array.from({ length: 22 }, (_, index) => `a_{${index + 1}}`).join('+');
+        const doc = `Intro\n\n$$\nx^2\\tag{1}\n$$\n\n$$\n${longFormula}\\tag{123}\n$$\n\nEnd`;
+        const view = track(createBrowserView(doc, 0, [EditorView.lineWrapping]));
+        view.dom.parentElement!.style.width = '360px';
+        await document.fonts.ready;
+
+        const blocks = view.dom.querySelectorAll<HTMLElement>('.cm-enhanced-rendering-math-block');
+        const shortBlock = blocks[0]!;
+        const shortRect = shortBlock.getBoundingClientRect();
+        const shortTerm = shortBlock.querySelector('.katex-base')!.getBoundingClientRect();
+        const shortTag = shortBlock.querySelector('.katex-tag')!.getBoundingClientRect();
+        expect(Math.abs((shortTerm.left + shortTerm.right - shortRect.left - shortRect.right) / 2)).toBeLessThan(1);
+        expect(shortTag.left).toBeGreaterThan(shortTerm.right);
+        expect(shortRect.right - shortTag.right).toBeLessThan(20);
+
+        const block = blocks[1]!;
+        const terms = block.querySelectorAll('.katex-base');
+        const rightmostTerm = terms[terms.length - 1]!;
+        const tag = block.querySelector('.katex-tag')!;
+        expect(tag.getBoundingClientRect().left).toBeGreaterThan(rightmostTerm.getBoundingClientRect().right);
+        expect(block.scrollWidth).toBeGreaterThan(block.clientWidth);
+        expect(view.scrollDOM.scrollWidth).toBe(view.scrollDOM.clientWidth);
+
+        block.scrollLeft = block.scrollWidth;
+        const visibleLeft = block.getBoundingClientRect().left + block.clientLeft;
+        const visibleRight = visibleLeft + block.clientWidth;
+        expect(block.scrollLeft).toBeGreaterThan(0);
+        expect(rightmostTerm.getBoundingClientRect().left).toBeGreaterThanOrEqual(visibleLeft);
+        expect(tag.getBoundingClientRect().right).toBeLessThanOrEqual(visibleRight + 1);
+        expect(view.scrollDOM.scrollLeft).toBe(0);
+    });
+
+    it('shows a short final line and its tag together when an earlier line overflows', async () => {
+        const longFormula = Array.from({ length: 30 }, (_, index) => `a_{${index + 1}}`).join('+');
+        const doc = `Intro\n\n$$\n${longFormula} \\newline z \\tag{1}\n$$\n\nEnd`;
+        const view = track(createBrowserView(doc, 0, [EditorView.lineWrapping]));
+        view.dom.parentElement!.style.width = '360px';
+        await document.fonts.ready;
+
+        const block = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        const terms = Array.from(block.querySelectorAll('.katex-html .katex-base'));
+        const finalTerm = terms.pop()!;
+        const lastWideTerm = terms.pop()!;
+        const tag = block.querySelector('.katex-tag')!;
+        const visibleLeft = block.getBoundingClientRect().left + block.clientLeft;
+        const visibleRight = visibleLeft + block.clientWidth;
+
+        expect(finalTerm.getBoundingClientRect().left).toBeGreaterThanOrEqual(visibleLeft);
+        expect(tag.getBoundingClientRect().left).toBeGreaterThan(finalTerm.getBoundingClientRect().right);
+        expect(tag.getBoundingClientRect().right).toBeLessThanOrEqual(visibleRight);
+        expect(lastWideTerm.getBoundingClientRect().right).toBeGreaterThan(visibleRight);
+
+        block.scrollLeft = block.scrollWidth;
+        expect(lastWideTerm.getBoundingClientRect().right).toBeLessThanOrEqual(visibleRight + 1);
+        expect(view.scrollDOM.scrollLeft).toBe(0);
+    });
+
+    it('aligns the tag with the last line after an explicit line break', async () => {
+        const doc = 'Intro\n\n$$\na \\newline 1\\frac{b}{c} \\tag{1}\n$$';
+        const view = track(createBrowserView(doc));
+        await document.fonts.ready;
+        const block = view.dom.querySelector('.cm-enhanced-rendering-math-block')!;
+        const terms = block.querySelectorAll('.katex-html .katex-base');
+        expect(terms).toHaveLength(2);
+        const lastLine = terms[1]!.getBoundingClientRect();
+        expect(lastLine.top).toBeGreaterThanOrEqual(terms[0]!.getBoundingClientRect().bottom);
+        const tag = block.querySelector('.katex-tag')!;
+        expect(tag.textContent).toBe('(1)');
+        const finalLineText = terms[1]!.querySelector('.mord')!.getBoundingClientRect();
+        const tagText = tag.querySelector('.mord')!.getBoundingClientRect();
+        expect(Math.abs(tagText.top - finalLineText.top)).toBeLessThan(1);
+    });
+
+    it('keeps a tag from adding space below a short final line', async () => {
+        const equation = String.raw`\left(\dfrac{1}{\dfrac{1}{\dfrac{1}{\dfrac{1}{x}}}}\right) \newline a`;
+        const doc = `Intro\n\n$$\n${equation}\n$$\n\n$$\n${equation} \\tag{1}\n$$`;
+        const view = track(createBrowserView(doc));
+        await document.fonts.ready;
+        const equations = view.dom.querySelectorAll('.cm-enhanced-rendering-math-block .katex-html');
+        expect(equations).toHaveLength(2);
+        const untagged = equations[0]!.getBoundingClientRect();
+        const tagged = equations[1]!.getBoundingClientRect();
+        expect(tagged.height).toBeLessThan(untagged.height + 1);
+    });
+
+    it('places the tag on the blank line after a trailing explicit line break', async () => {
+        const doc = 'Intro\n\n$$\na \\newline \\tag{1}\n$$';
+        const view = track(createBrowserView(doc));
+        await document.fonts.ready;
+        const block = view.dom.querySelector('.cm-enhanced-rendering-math-block')!;
+        const firstLine = block.querySelector('.katex-base')!.getBoundingClientRect();
+        const tagText = block.querySelector('.katex-tag .mord')!.getBoundingClientRect();
+        expect(tagText.top).toBeGreaterThanOrEqual(firstLine.bottom - 1);
+    });
+
+    it('keeps a display math block at full editor width when the cursor is on the following line', async () => {
+        const doc = '$$\nx^2 + y^2 = z^2\n$$';
+        const view = track(createBrowserView(doc, 0, [EditorView.lineWrapping]));
+        view.dom.parentElement!.style.width = '360px';
+
+        // Add a trailing line and place the cursor there so the math block renders instead of revealing its source.
+        const docWithTrailingLine = `${doc}\n`;
+        view.dispatch({
+            changes: { from: 0, to: doc.length, insert: docWithTrailingLine },
+            selection: { anchor: docWithTrailingLine.length },
+        });
+        await nextFrames();
+
+        const block = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        expect(block.getBoundingClientRect().width).toBeGreaterThan(300);
+        expect(block.getBoundingClientRect().width).toBeLessThanOrEqual(360);
     });
 });
