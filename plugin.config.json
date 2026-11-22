@@ -1,6 +1,7 @@
 {
     "extraScripts": ["contentScript/enhancedRendering.ts"],
     "buildOptions": { "target": "es2020" },
+    "mainBuildOptions": { "platform": "browser" },
     "contentScriptBuildOptions": {
         "loader": {
             ".woff2": "dataurl",
