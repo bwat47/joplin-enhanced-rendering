@@ -10,6 +10,18 @@ import { mermaidWidthExtension } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 
 /**
+ * Neutralizes the browser's native `::selection` highlight on block widgets.
+ *
+ * CodeMirror's `drawSelection` only blanks native `::selection` inside `.cm-line`, while
+ * `block: true` replace widgets are direct children of `.cm-content`.
+ * `currentColor` preserves the element's text color when the host sets a selection color.
+ */
+const NATIVE_SELECTION_RESET = {
+    'background-color': 'transparent !important',
+    color: 'currentColor !important',
+};
+
+/**
  * Widget layout, error styling, KaTeX specificity overrides, and Pele CSS custom properties
  * mapped to Joplin's theme variables with CodeMirror light/dark fallbacks.
  */
@@ -34,6 +46,12 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '.cm-enhanced-rendering-block:hover': {
         borderColor: 'var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
     },
+    // `&.cm-focused` copies outrank Joplin's `&.cm-focused ::selection` (`!important`, 0,2,1)
+    // regardless of stylesheet order.
+    '.cm-enhanced-rendering-block::selection': NATIVE_SELECTION_RESET,
+    '.cm-enhanced-rendering-block ::selection': NATIVE_SELECTION_RESET,
+    '&.cm-focused .cm-enhanced-rendering-block::selection': NATIVE_SELECTION_RESET,
+    '&.cm-focused .cm-enhanced-rendering-block ::selection': NATIVE_SELECTION_RESET,
     '.cm-enhanced-rendering-mermaid > svg.pele': {
         display: 'block',
         margin: '0 auto',

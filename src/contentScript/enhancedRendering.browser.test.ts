@@ -548,4 +548,36 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(block.getBoundingClientRect().width).toBeGreaterThan(300);
         expect(block.getBoundingClientRect().width).toBeLessThanOrEqual(360);
     });
+
+    it('suppresses native ::selection highlights on Mermaid and display math block widgets', async () => {
+        const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A["$$x^2$$"] --> B[Output]\n```\n\n$$\nE = mc^2\n$$\n\nOutro';
+        const joplinFocusedSelection = EditorView.theme({
+            '&.cm-focused ::selection': {
+                backgroundColor: 'rgb(0, 102, 204) !important',
+                color: 'rgb(255, 255, 255) !important',
+            },
+        });
+        const view = track(createBrowserView(doc, 0, [joplinFocusedSelection]));
+
+        const targets: Element[] = [
+            view.dom.querySelector('.cm-enhanced-rendering-mermaid')!,
+            view.dom.querySelector('.cm-enhanced-rendering-mermaid text.pele-label')!,
+            view.dom.querySelector('.cm-enhanced-rendering-mermaid foreignObject.pele-math math')!,
+            view.dom.querySelector('.cm-enhanced-rendering-math-block')!,
+            view.dom.querySelector('.cm-enhanced-rendering-math-block .mord')!,
+        ];
+
+        for (const focused of [false, true]) {
+            if (focused) {
+                view.focus();
+            }
+            await expect.poll(() => view.dom.classList.contains('cm-focused')).toBe(focused);
+            for (const target of targets) {
+                expect(target).not.toBeNull();
+                const selectionStyle = getComputedStyle(target, '::selection');
+                expect(selectionStyle.backgroundColor).toBe('rgba(0, 0, 0, 0)');
+                expect(selectionStyle.color).toBe(getComputedStyle(target).color);
+            }
+        }
+    });
 });
