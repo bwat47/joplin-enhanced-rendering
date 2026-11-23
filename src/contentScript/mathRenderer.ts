@@ -259,7 +259,13 @@ function groupTaggedLine(container: HTMLElement): void {
     html.append(taggedLine);
 }
 
+/**
+ * KaTeX math widget. Rendering is deferred until CodeMirror mounts the widget, so decorations for
+ * off-screen math (e.g. every block revealed by a select-all) never run KaTeX.
+ */
 export class MathWidget extends WidgetType {
+    private renderedResult: MathRenderResult | null = null;
+
     /**
      * @param preview Renders a read-only live preview shown below revealed display math source
      *   instead of a click-to-edit replacement for it.
@@ -267,20 +273,24 @@ export class MathWidget extends WidgetType {
     public constructor(
         private readonly tex: string,
         private readonly displayMode: boolean,
-        private readonly result: MathRenderResult,
         public readonly editOffset: number,
         private readonly preview = false
     ) {
         super();
     }
 
+    private get result(): MathRenderResult {
+        this.renderedResult ??= renderMath(this.tex, this.displayMode);
+        return this.renderedResult;
+    }
+
+    /** Compares inputs only, so CodeMirror's decoration diff never forces a render. */
     public override eq(other: WidgetType): boolean {
         return (
             other instanceof MathWidget &&
             other.tex === this.tex &&
             other.displayMode === this.displayMode &&
             other.editOffset === this.editOffset &&
-            other.result.ok === this.result.ok &&
             other.preview === this.preview
         );
     }
@@ -296,8 +306,9 @@ export class MathWidget extends WidgetType {
             ? 'cm-enhanced-rendering-block cm-enhanced-rendering-math-block'
             : 'cm-enhanced-rendering-inline cm-enhanced-rendering-math';
 
-        if (this.result.ok) {
-            container.innerHTML = this.result.html;
+        const result = this.result;
+        if (result.ok) {
+            container.innerHTML = result.html;
             if (this.displayMode) {
                 groupTaggedLine(container);
             }
@@ -305,8 +316,8 @@ export class MathWidget extends WidgetType {
             container.dataset.renderError = 'true';
             const errorEl = doc.createElement(this.displayMode ? 'div' : 'span');
             errorEl.className = 'cm-enhanced-rendering-error';
-            errorEl.title = this.result.error;
-            errorEl.textContent = this.displayMode ? `KaTeX error: ${this.result.error}` : this.tex;
+            errorEl.title = result.error;
+            errorEl.textContent = this.displayMode ? `KaTeX error: ${result.error}` : this.tex;
             container.appendChild(errorEl);
         }
 

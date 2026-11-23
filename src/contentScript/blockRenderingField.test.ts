@@ -2,6 +2,8 @@ import { markdown } from '@codemirror/lang-markdown';
 import { ensureSyntaxTree, LanguageDescription, syntaxTree, syntaxTreeAvailable } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import { EditorView, type Decoration, type WidgetType } from '@codemirror/view';
+import type * as Katex from 'katex';
+import { renderToString } from 'katex';
 import { vi, type Mock } from 'vitest';
 
 import { blockRenderingExtension } from './blockRenderingField';
@@ -10,6 +12,13 @@ import * as mermaidRenderer from './mermaidRenderer';
 import { mermaidWidthExtension, resetLastKnownMermaidWidth, setMermaidMaxWidthEffect } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
+
+// Count real KaTeX work: `MathWidget` calls `renderMath` from inside its own module, where a
+// namespace spy cannot observe it.
+vi.mock('katex', async (importOriginal) => {
+    const katex = await importOriginal<typeof Katex>();
+    return { ...katex, renderToString: vi.fn(katex.renderToString) };
+});
 
 function createState(doc: string, anchor = 0, head = anchor): EditorState {
     const state = EditorState.create({
@@ -418,28 +427,32 @@ describe('blockRenderingField caching', () => {
         expect(widgets.map((widget) => widget.estimatedHeight)).toEqual([-1, -1, -1]);
     });
 
-    it('keeps BlockMath render results across selection-only updates', () => {
-        const renderSpy = vi.spyOn(mathRenderer, 'renderMath');
+    it('builds BlockMath decorations and previews without running KaTeX until a view mounts them', () => {
+        const katexSpy = vi.mocked(renderToString);
+        katexSpy.mockClear();
         const doc = 'Intro\n\n$$\nx^2 + y^2 = z^2\n$$\n\nOutro';
         let state = createState(doc, 0);
         const [rendered] = collectBlockDecorations(state);
 
-        expect(renderSpy).toHaveBeenCalledTimes(1);
-        renderSpy.mockClear();
-
-        state = state.update({ selection: { anchor: 3 } }).state;
-        expect(renderSpy).not.toHaveBeenCalled();
-
         const blockStart = doc.indexOf('$$');
         state = state.update({ selection: { anchor: blockStart + 3 } }).state;
-        // Only the live preview is created while revealed, and it hits the render cache.
-        expect(renderSpy).toHaveBeenCalledExactlyOnceWith('x^2 + y^2 = z^2', true);
-        renderSpy.mockClear();
+        expect(collectPreviewDecorations(state)).toHaveLength(1);
 
         state = state.update({ selection: { anchor: doc.length } }).state;
         expect(state.selection.main.head).toBe(doc.length);
         expect(collectBlockDecorations(state)).toEqual([rendered]);
-        expect(renderSpy).not.toHaveBeenCalled();
+        expect(katexSpy).not.toHaveBeenCalled();
+
+        const view = new EditorView({ parent: document.createElement('div') });
+        try {
+            widgetOf(rendered!).toDOM(view);
+        } finally {
+            view.destroy();
+        }
+        expect(katexSpy).toHaveBeenCalledExactlyOnceWith(
+            'x^2 + y^2 = z^2',
+            expect.objectContaining({ displayMode: true })
+        );
     });
 });
 
@@ -507,14 +520,12 @@ describe('blockRenderingField Mermaid width changes', () => {
 
     it('recreates Mermaid widgets at the new width while reusing math decorations', () => {
         const widgetSpy = spyOnReplacementMermaidWidgets();
-        const renderMathSpy = vi.spyOn(mathRenderer, 'renderMath');
         const before = setWidth(createWidthAwareState(doc), 640);
         const beforeMath = collectBlockDecorations(before).find(
             (decoration) => widgetOf(decoration) instanceof mathRenderer.MathWidget
         );
         expect(beforeMath).toBeDefined();
         widgetSpy.mockClear();
-        renderMathSpy.mockClear();
 
         const after = setWidth(before, 512);
         const decorations = collectBlockDecorations(after);
@@ -522,15 +533,13 @@ describe('blockRenderingField Mermaid width changes', () => {
         expect(decorations).toHaveLength(2);
         expect(widgetSpy).toHaveBeenCalledExactlyOnceWith(mermaidSource, expect.any(Number), 512);
         expect(decorations).toContain(beforeMath);
-        expect(renderMathSpy).not.toHaveBeenCalled();
 
         // The pre-change state stays usable: revealing and leaving its math block reuses its own cache.
         const mathPos = doc.indexOf('x^2');
-        const revealed = before.update({ selection: { anchor: mathPos } }).state;
-        renderMathSpy.mockClear();
-        const branched = revealed.update({ selection: { anchor: 0 } }).state;
+        const branched = before
+            .update({ selection: { anchor: mathPos } })
+            .state.update({ selection: { anchor: 0 } }).state;
         expect(collectBlockDecorations(branched)).toContain(beforeMath);
-        expect(renderMathSpy).not.toHaveBeenCalled();
     });
 
     it('keeps a revealed Mermaid block revealed across a width change and renders it at the new width on leave', () => {

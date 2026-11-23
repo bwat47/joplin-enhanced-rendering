@@ -13,7 +13,7 @@ import {
 } from '@codemirror/state';
 import { Decoration, EditorView, type DecorationSet } from '@codemirror/view';
 
-import { extractBlockMath, MathWidget, renderMath } from './mathRenderer';
+import { extractBlockMath, MathWidget } from './mathRenderer';
 import { extractMermaidBlock, MermaidWidget } from './mermaidRenderer';
 import { getMermaidMaxWidth, hasMermaidMaxWidthChanged } from './mermaidWidth';
 import { getRevealSelection, hasRevealSelectionChanged, isReleasingFrozenSelection } from './pointerRevealFreeze';
@@ -153,14 +153,14 @@ function createBlockDecoration(
     const widget =
         kind === 'mermaid'
             ? new MermaidWidget(source, editOffset, mermaidMaxWidth ?? undefined)
-            : new MathWidget(source, true, renderMath(source, true), editOffset);
+            : new MathWidget(source, true, editOffset);
     return Decoration.replace({ widget, block: true }).range(replaceFrom, replaceTo);
 }
 
 /**
  * Creates the read-only widget placed after a revealed block's closing line so its rendered output
- * stays visible below the source while editing. Widgets are cheap to recreate: CodeMirror keeps the
- * mounted DOM when the new widget is `eq` to the old one, and renders are memoized by source.
+ * stays visible below the source while editing. Widgets are cheap to recreate: both kinds render
+ * lazily when mounted, and CodeMirror keeps the mounted DOM when the new widget is `eq` to the old one.
  */
 function createPreviewDecoration(
     kind: BlockKind,
@@ -171,7 +171,7 @@ function createPreviewDecoration(
     const widget =
         kind === 'mermaid'
             ? new MermaidWidget(source, 0, mermaidMaxWidth ?? undefined, true)
-            : new MathWidget(source, true, renderMath(source, true), 0, true);
+            : new MathWidget(source, true, 0, true);
     return Decoration.widget({ widget, block: true, side: 1 }).range(replaceTo);
 }
 

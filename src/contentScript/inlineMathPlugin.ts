@@ -9,7 +9,7 @@ import {
     type ViewUpdate,
 } from '@codemirror/view';
 
-import { extractInlineMath, MathWidget, renderMath } from './mathRenderer';
+import { extractInlineMath, MathWidget } from './mathRenderer';
 import { getRevealSelection, hasRevealSelectionChanged } from './pointerRevealFreeze';
 import { rangeIntersectsSelection } from './renderUtils';
 
@@ -35,8 +35,7 @@ function buildInlineMathDecorations(view: EditorView): DecorationSet {
                     return;
                 }
 
-                const result = renderMath(expr.tex, false);
-                const widget = new MathWidget(expr.tex, false, result, expr.editOffset);
+                const widget = new MathWidget(expr.tex, false, expr.editOffset);
                 decorations.push(Decoration.replace({ widget }).range(expr.replaceFrom, expr.replaceTo));
             },
         });
