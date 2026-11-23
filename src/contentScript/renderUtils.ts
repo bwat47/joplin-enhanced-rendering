@@ -111,6 +111,18 @@ export function attachEditOnClick(element: HTMLElement, view: EditorView, editOf
 }
 
 /**
+ * Makes a read-only preview widget inert to left-button presses: the editor keeps its selection and
+ * focus, and the browser does not place a caret or start a native selection inside the widget.
+ */
+export function attachPreviewPointerGuard(element: HTMLElement): void {
+    element.addEventListener('mousedown', (event: MouseEvent) => {
+        if (event.button === 0 && !isOnHorizontalScrollbar(element, event)) {
+            event.preventDefault();
+        }
+    });
+}
+
+/**
  * Strips up to `indent` characters of leading indentation matching `prefix` from each line.
  * Used for fenced code blocks indented inside list items.
  *

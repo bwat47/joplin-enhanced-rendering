@@ -5,7 +5,7 @@ import { ParseError, renderToString } from 'katex';
 import type { MathMarkup } from 'pele';
 
 import { logger } from '../logger';
-import { attachEditOnClick, LruCache } from './renderUtils';
+import { attachEditOnClick, attachPreviewPointerGuard, LruCache } from './renderUtils';
 
 export interface MathExpression {
     from: number;
@@ -260,11 +260,16 @@ function groupTaggedLine(container: HTMLElement): void {
 }
 
 export class MathWidget extends WidgetType {
+    /**
+     * @param preview Renders a read-only live preview shown below revealed display math source
+     *   instead of a click-to-edit replacement for it.
+     */
     public constructor(
         private readonly tex: string,
         private readonly displayMode: boolean,
         private readonly result: MathRenderResult,
-        public readonly editOffset: number
+        public readonly editOffset: number,
+        private readonly preview = false
     ) {
         super();
     }
@@ -275,7 +280,8 @@ export class MathWidget extends WidgetType {
             other.tex === this.tex &&
             other.displayMode === this.displayMode &&
             other.editOffset === this.editOffset &&
-            other.result.ok === this.result.ok
+            other.result.ok === this.result.ok &&
+            other.preview === this.preview
         );
     }
 
@@ -313,7 +319,12 @@ export class MathWidget extends WidgetType {
             });
         }
 
-        attachEditOnClick(container, view, this.editOffset);
+        if (this.preview) {
+            container.classList.add('cm-enhanced-rendering-preview');
+            attachPreviewPointerGuard(container);
+        } else {
+            attachEditOnClick(container, view, this.editOffset);
+        }
         return container;
     }
 

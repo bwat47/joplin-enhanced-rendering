@@ -30,6 +30,8 @@ interface BlockEntry {
     readonly replaceTo: number;
     readonly editOffset: number;
     readonly decoration: Range<Decoration> | null;
+    /** Live preview shown below the source while the block is revealed; null while rendered. */
+    readonly preview: Range<Decoration> | null;
     readonly rendered: boolean;
 }
 
@@ -155,6 +157,28 @@ function createBlockDecoration(
     return Decoration.replace({ widget, block: true }).range(replaceFrom, replaceTo);
 }
 
+/**
+ * Creates the read-only widget placed after a revealed block's closing line so its rendered output
+ * stays visible below the source while editing. Widgets are cheap to recreate: CodeMirror keeps the
+ * mounted DOM when the new widget is `eq` to the old one, and renders are memoized by source.
+ */
+function createPreviewDecoration(
+    kind: BlockKind,
+    source: string,
+    replaceTo: number,
+    mermaidMaxWidth: number | null
+): Range<Decoration> {
+    const widget =
+        kind === 'mermaid'
+            ? new MermaidWidget(source, 0, mermaidMaxWidth ?? undefined, true)
+            : new MathWidget(source, true, renderMath(source, true), 0, true);
+    return Decoration.widget({ widget, block: true, side: 1 }).range(replaceTo);
+}
+
+function activeDecoration(entry: BlockEntry): Range<Decoration> | null {
+    return entry.rendered ? entry.decoration : entry.preview;
+}
+
 function createBlockEntry(
     kind: BlockKind,
     source: string,
@@ -178,7 +202,8 @@ function createBlockEntry(
         recordCachedDecoration(nextCache, key, decoration.value, replaceTo);
     }
 
-    return { kind, source, replaceFrom, replaceTo, editOffset, decoration, rendered };
+    const preview = rendered ? null : createPreviewDecoration(kind, source, replaceTo, mermaidMaxWidth);
+    return { kind, source, replaceFrom, replaceTo, editOffset, decoration, preview, rendered };
 }
 
 function buildBlockState(
@@ -216,8 +241,9 @@ function buildBlockState(
                         nextCache
                     );
                     blocks.push(entry);
-                    if (entry.rendered && entry.decoration) {
-                        activeDecorations.push(entry.decoration);
+                    const active = activeDecoration(entry);
+                    if (active) {
+                        activeDecorations.push(active);
                     }
                 }
                 return false;
@@ -238,8 +264,9 @@ function buildBlockState(
                         nextCache
                     );
                     blocks.push(entry);
-                    if (entry.rendered && entry.decoration) {
-                        activeDecorations.push(entry.decoration);
+                    const active = activeDecoration(entry);
+                    if (active) {
+                        activeDecorations.push(active);
                     }
                 }
                 return false;
@@ -284,8 +311,9 @@ function resolveBlockDecoration(
 
 /**
  * Applies `revealSelection` to an existing block: rendered blocks get a decoration (reused from
- * the cache when possible) and revealed blocks keep theirs for later reuse. Returns the original
- * entry when nothing changed. `nextCache` is created lazily from `previousCache` on first write.
+ * the cache when possible) and revealed blocks keep theirs for later reuse while showing a live
+ * preview below their source. Returns the original entry when nothing changed. `nextCache` is
+ * created lazily from `previousCache` on first write.
  */
 function updateBlockForSelection(
     block: BlockEntry,
@@ -300,10 +328,14 @@ function updateBlockForSelection(
         ({ decoration, nextCache } = resolveBlockDecoration(block, previousCache, nextCache, mermaidMaxWidth));
     }
 
+    const preview = shouldRender
+        ? null
+        : (block.preview ?? createPreviewDecoration(block.kind, block.source, block.replaceTo, mermaidMaxWidth));
+
     const entry =
-        shouldRender === block.rendered && decoration === block.decoration
+        shouldRender === block.rendered && decoration === block.decoration && preview === block.preview
             ? block
-            : { ...block, decoration, rendered: shouldRender };
+            : { ...block, decoration, preview, rendered: shouldRender };
     return { entry, nextCache };
 }
 
@@ -333,8 +365,9 @@ function updateBlockStateForMermaidWidth(
                 : updateBlockForSelection(block, revealSelection, previous.cache, nextCache, mermaidMaxWidth).entry;
 
         blocks.push(entry);
-        if (entry.rendered && entry.decoration) {
-            activeDecorations.push(entry.decoration);
+        const active = activeDecoration(entry);
+        if (active) {
+            activeDecorations.push(active);
         }
     }
 
@@ -381,8 +414,9 @@ function updateBlockStateForSelection(
             mermaidMaxWidth
         ));
         blocks.push(entry);
-        if (entry.rendered && entry.decoration) {
-            activeDecorations.push(entry.decoration);
+        const active = activeDecoration(entry);
+        if (active) {
+            activeDecorations.push(active);
         }
     }
 
