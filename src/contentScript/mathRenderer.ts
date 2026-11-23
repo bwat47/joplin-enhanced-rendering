@@ -296,7 +296,7 @@ export class MathWidget extends WidgetType {
     }
 
     public override get estimatedHeight(): number {
-        return this.displayMode ? (mathHeightCache.get(this.tex) ?? -1) : -1;
+        return this.displayMode ? (mathHeightCache.peek(this.tex) ?? -1) : -1;
     }
 
     public override toDOM(view: EditorView): HTMLElement {
