@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 
 import { enhancedRenderingExtension } from './enhancedRendering';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
+import { RENDERED_MATH_BLOCK, RENDERED_MERMAID } from './testing/selectors';
 
 function createView(doc: string, cursorPos = 0): EditorView {
     const parent = document.createElement('div');
@@ -59,8 +60,8 @@ describe('pointerRevealFreezeExtension', () => {
         const doc = 'Top\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\n$$\nx^2\n$$\n\nInline $a + b$ end.';
         const view = track(createView(doc, 0));
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(1);
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MERMAID)).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
         expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math')).toHaveLength(1);
 
         // Start left-button mouse gesture.
@@ -73,16 +74,16 @@ describe('pointerRevealFreezeExtension', () => {
         });
 
         // All rendered widgets stay frozen while left mouse button is still held.
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(1);
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MERMAID)).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
         expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math')).toHaveLength(1);
 
         // Release left mouse button and flush rAF -> all intersecting widgets expand.
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         flushAnimationFrames();
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(0);
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MERMAID)).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(0);
         expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math')).toHaveLength(0);
         expect(view.state.selection.main.from).toBe(0);
         expect(view.state.selection.main.to).toBe(doc.length);
@@ -96,14 +97,14 @@ describe('pointerRevealFreezeExtension', () => {
 
         // Sweep across the block math.
         view.dispatch({ selection: { anchor: 0, head: doc.length }, userEvent: 'select.pointer' });
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
 
         // Drag back to line 1 before releasing.
         view.dispatch({ selection: { anchor: 0, head: 3 }, userEvent: 'select.pointer' });
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         flushAnimationFrames();
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
     });
 
     it('ignores non-left mouse buttons', () => {
@@ -113,7 +114,7 @@ describe('pointerRevealFreezeExtension', () => {
         view.dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 2 }));
         view.dispatch({ selection: { anchor: 0, head: doc.length }, userEvent: 'select.pointer' });
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(0);
     });
 
     it('releases freeze on mousemove with buttons === 0 or window blur', () => {
@@ -122,26 +123,26 @@ describe('pointerRevealFreezeExtension', () => {
 
         view.dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1 }));
         view.dispatch({ selection: { anchor: 0, head: doc.length }, userEvent: 'select.pointer' });
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
 
         // Pointer released outside window, then mouse moves back with buttons === 0.
         document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true, buttons: 0 }));
         flushAnimationFrames();
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(0);
 
         // Reset and test window blur safety release.
         view.dispatch({ selection: { anchor: 0 } });
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
 
         view.dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1 }));
         view.dispatch({ selection: { anchor: 0, head: doc.length }, userEvent: 'select.pointer' });
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(1);
 
         window.dispatchEvent(new Event('blur'));
         flushAnimationFrames();
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(0);
     });
 
     it('clears freeze immediately on non-pointer selection changes', () => {
@@ -151,7 +152,7 @@ describe('pointerRevealFreezeExtension', () => {
         view.dom.dispatchEvent(new MouseEvent('mousedown', { bubbles: true, button: 0, buttons: 1 }));
         view.dispatch({ selection: { anchor: doc.indexOf('x^2') }, userEvent: 'select' });
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(0);
     });
 
     it('redirects a collapsed pointer click on a block boundary to the first content line below the opening fence', () => {
@@ -167,7 +168,7 @@ describe('pointerRevealFreezeExtension', () => {
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         flushAnimationFrames();
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MERMAID)).toHaveLength(0);
         expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
 
         // Same for multi-line block math.
@@ -179,7 +180,7 @@ describe('pointerRevealFreezeExtension', () => {
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         flushAnimationFrames();
 
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-math-block')).toHaveLength(0);
+        expect(view.dom.querySelectorAll(RENDERED_MATH_BLOCK)).toHaveLength(0);
         expect(view.state.selection.main.head).toBe(doc.indexOf('x = 1'));
     });
 });

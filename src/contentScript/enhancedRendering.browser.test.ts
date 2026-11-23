@@ -9,6 +9,7 @@ import { enhancedRenderingExtension } from './enhancedRendering';
 import { clearMermaidRenderCache, MermaidWidget } from './mermaidRenderer';
 import { resetLastKnownMermaidWidth } from './mermaidWidth';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
+import { BLOCK_PREVIEW, RENDERED_MATH_BLOCK, RENDERED_MERMAID } from './testing/selectors';
 
 // Match Joplin's createEditor.ts, which disables Chrome EditContext and uses contenteditable.
 (EditorView as unknown as { EDIT_CONTEXT: boolean }).EDIT_CONTEXT = false;
@@ -78,18 +79,18 @@ describe('enhancedRenderingExtension (browser)', () => {
         const doc = 'Heading\n\n```mermaid\nflowchart LR\n  A[Input] --> B[Output]\n```\n\nFooter';
         const view = track(createBrowserView(doc, 0));
 
-        const svg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele');
+        const svg = view.dom.querySelector<SVGSVGElement>(`${RENDERED_MERMAID} > svg.pele`);
         expect(svg).not.toBeNull();
 
         const rect = svg!.getBoundingClientRect();
         expect(rect.width).toBeGreaterThan(50);
         expect(rect.height).toBeGreaterThan(20);
 
-        const widget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-mermaid')!;
+        const widget = view.dom.querySelector<HTMLElement>(RENDERED_MERMAID)!;
         view.focus();
         await userEvent.click(widget, { delay: 100 });
 
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).toBeNull();
         expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
     });
 
@@ -98,7 +99,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const view = track(createBrowserView(doc, 0));
 
         const inlineKatex = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math .katex');
-        const blockKatex = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block .katex');
+        const blockKatex = view.dom.querySelector<HTMLElement>(`${RENDERED_MATH_BLOCK} .katex`);
         expect(inlineKatex).not.toBeNull();
         expect(blockKatex).not.toBeNull();
 
@@ -111,45 +112,65 @@ describe('enhancedRenderingExtension (browser)', () => {
         const doc = 'Line above\n```mermaid\nflowchart LR\n  A --> B\n```\nLine below';
         const view = track(createBrowserView(doc, 0));
 
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
 
         cursorLineDown(view);
 
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).toBeNull();
         expect(view.contentDOM.textContent).toContain('flowchart LR');
 
         // Move to Line below so it re-renders, then press ArrowUp to enter from below.
         view.dispatch({ selection: { anchor: doc.indexOf('Line below') } });
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
 
         cursorLineUp(view);
 
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).toBeNull();
         expect(view.contentDOM.textContent).toContain('flowchart LR');
+    });
+
+    it.each([
+        ['Mermaid', '```mermaid\nflowchart LR\n  A --> B\n```'],
+        ['display math', '$$\nx^2 + y^2\n$$'],
+    ])('moves the cursor past the live preview of a revealed %s block with ArrowDown and ArrowUp', (_label, block) => {
+        const doc = `Line above\n${block}\nLine below`;
+        const closeLine = block.slice(block.lastIndexOf('\n') + 1);
+        const closeLineFrom = doc.lastIndexOf(closeLine);
+        const view = track(createBrowserView(doc, closeLineFrom));
+
+        expect(view.dom.querySelector(BLOCK_PREVIEW)).not.toBeNull();
+
+        cursorLineDown(view);
+        expect(view.state.doc.lineAt(view.state.selection.main.head).text).toBe('Line below');
+
+        // Re-enter from below: the cursor lands on the closing line, not inside the preview.
+        cursorLineUp(view);
+        expect(view.state.doc.lineAt(view.state.selection.main.head).text).toBe(closeLine);
+        expect(view.dom.querySelector(BLOCK_PREVIEW)).not.toBeNull();
     });
 
     it('does not redirect cursorDocEnd or cursorDocStart into a rendered block between the first and last lines', () => {
         const doc = 'Line above\n```mermaid\nflowchart LR\n  A --> B\n```\nLine below';
         const view = track(createBrowserView(doc, 0));
 
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
 
         cursorDocEnd(view);
 
         expect(view.state.selection.main.head).toBe(doc.length);
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
 
         cursorDocStart(view);
 
         expect(view.state.selection.main.head).toBe(0);
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
     });
 
     it('applies dark fallback Pele CSS variables under a dark CodeMirror theme', () => {
         const doc = 'Intro\n\n```mermaid\nflowchart LR\n  A --> B\n```';
         const view = track(createBrowserView(doc, 0, [EditorView.theme({}, { dark: true })]));
 
-        const container = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-mermaid')!;
+        const container = view.dom.querySelector<HTMLElement>(RENDERED_MERMAID)!;
         expect(getComputedStyle(container).getPropertyValue('--pele-bg').trim()).toBe('#1d2024');
         expect(getComputedStyle(container).getPropertyValue('--pele-fg').trim()).toBe('#dddddd');
     });
@@ -159,7 +180,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const view = track(createBrowserView(doc, 0));
 
         const mathObjects = Array.from(
-            view.dom.querySelectorAll<SVGForeignObjectElement>('.cm-enhanced-rendering-mermaid foreignObject.pele-math')
+            view.dom.querySelectorAll<SVGForeignObjectElement>(`${RENDERED_MERMAID} foreignObject.pele-math`)
         );
         expect(mathObjects).toHaveLength(2);
 
@@ -220,7 +241,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const doc = 'Start line\n\n```mermaid\nflowchart LR\n  A --> B\n```\n\nInline $x + 1$ end line';
         const view = track(createBrowserView(doc, 0));
 
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
         expect(view.dom.querySelector('.cm-enhanced-rendering-math')).not.toBeNull();
 
         const firstLine = view.contentDOM.querySelector<HTMLElement>('.cm-line')!;
@@ -243,14 +264,14 @@ describe('enhancedRenderingExtension (browser)', () => {
         });
 
         // Both Mermaid and inline math remain rendered while left button is held.
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).not.toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
         expect(view.dom.querySelector('.cm-enhanced-rendering-math')).not.toBeNull();
 
         document.dispatchEvent(new MouseEvent('mouseup', { bubbles: true, button: 0 }));
         await nextFrames();
 
         // After mouseup, both expand to raw Markdown while keeping the dragged selection.
-        expect(view.dom.querySelector('.cm-enhanced-rendering-mermaid')).toBeNull();
+        expect(view.dom.querySelector(RENDERED_MERMAID)).toBeNull();
         expect(view.dom.querySelector('.cm-enhanced-rendering-math')).toBeNull();
         expect(view.state.selection.main.from).toBe(0);
         expect(view.state.selection.main.to).toBe(doc.length);
@@ -262,19 +283,19 @@ describe('enhancedRenderingExtension (browser)', () => {
         view.focus();
 
         // Click on the left padding of the Mermaid block widget.
-        const mermaidWidget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-mermaid')!;
+        const mermaidWidget = view.dom.querySelector<HTMLElement>(RENDERED_MERMAID)!;
         await userEvent.click(mermaidWidget, { position: { x: 5, y: 15 } });
         expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
 
         // Move back to Intro and click on the SVG text label inside the Mermaid diagram.
         view.dispatch({ selection: { anchor: 0 } });
-        const svgLabel = view.dom.querySelector<SVGTextElement>('.cm-enhanced-rendering-mermaid text.pele-label')!;
+        const svgLabel = view.dom.querySelector<SVGTextElement>(`${RENDERED_MERMAID} text.pele-label`)!;
         await userEvent.click(svgLabel);
         expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
 
         // Click on the multi-line block math widget even when text is currently selected elsewhere.
         view.dispatch({ selection: { anchor: 0, head: 5 } });
-        const mathWidget = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        const mathWidget = view.dom.querySelector<HTMLElement>(RENDERED_MATH_BLOCK)!;
         await userEvent.click(mathWidget);
         expect(view.state.selection.main.head).toBe(doc.indexOf('x = y + z'));
     });
@@ -287,7 +308,7 @@ describe('enhancedRenderingExtension (browser)', () => {
 
         await nextFrames();
 
-        const wideSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
+        const wideSvg = view.dom.querySelector<SVGSVGElement>(`${RENDERED_MERMAID} > svg.pele`)!;
         const wideWidth = Number(wideSvg.getAttribute('width'));
         const wideHeight = Number(wideSvg.getAttribute('height'));
         expect(wideWidth).toBeGreaterThan(wideHeight);
@@ -296,7 +317,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         parent.style.width = '360px';
         await new Promise((resolve) => setTimeout(resolve, 300));
 
-        const narrowSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
+        const narrowSvg = view.dom.querySelector<SVGSVGElement>(`${RENDERED_MERMAID} > svg.pele`)!;
         const narrowWidth = Number(narrowSvg.getAttribute('width'));
         const narrowHeight = Number(narrowSvg.getAttribute('height'));
         expect(narrowWidth).toBeLessThan(wideWidth);
@@ -306,7 +327,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         parent.style.width = '700px';
         await new Promise((resolve) => setTimeout(resolve, 300));
 
-        const restoredSvg = view.dom.querySelector<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')!;
+        const restoredSvg = view.dom.querySelector<SVGSVGElement>(`${RENDERED_MERMAID} > svg.pele`)!;
         expect(Number(restoredSvg.getAttribute('width'))).toBeGreaterThan(Number(restoredSvg.getAttribute('height')));
     });
 
@@ -343,7 +364,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         await nextFrames();
         const initialWidgets = getMermaidWidgets();
         expect(initialWidgets).toHaveLength(2);
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MERMAID)).toHaveLength(1);
         expect(initialWidgets[0]!.estimatedHeight).toBeGreaterThan(0);
         // The off-screen diagram has a decoration, but has not been rendered yet.
         expect(initialWidgets[1]!.estimatedHeight).toBe(-1);
@@ -353,16 +374,16 @@ describe('enhancedRenderingExtension (browser)', () => {
         await new Promise((resolve) => setTimeout(resolve, 300));
         const narrowedWidgets = getMermaidWidgets();
         expect(narrowedWidgets).toHaveLength(2);
-        expect(view.dom.querySelectorAll('.cm-enhanced-rendering-mermaid')).toHaveLength(1);
+        expect(view.dom.querySelectorAll(RENDERED_MERMAID)).toHaveLength(1);
         expect(narrowedWidgets[0]!.estimatedHeight).toBeGreaterThan(0);
         expect(narrowedWidgets[1]!.estimatedHeight).toBe(-1);
 
         view.dispatch({ effects: EditorView.scrollIntoView(doc.length - 'End'.length, { y: 'end' }) });
         await nextFrames();
 
-        const bottomSvg = Array.from(
-            view.dom.querySelectorAll<SVGSVGElement>('.cm-enhanced-rendering-mermaid > svg.pele')
-        ).find((svg) => svg.textContent.includes('Bottom'));
+        const bottomSvg = Array.from(view.dom.querySelectorAll<SVGSVGElement>(`${RENDERED_MERMAID} > svg.pele`)).find(
+            (svg) => svg.textContent.includes('Bottom')
+        );
         expect(bottomSvg).toBeDefined();
         expect(narrowedWidgets[1]!.estimatedHeight).toBeGreaterThan(0);
         // Rendered lazily at the narrow width, so the long LR chain wraps into a taller layout.
@@ -396,7 +417,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const initialContentWidth = view.contentDOM.getBoundingClientRect().width;
         expect(initialContentWidth).toBeLessThanOrEqual(360);
 
-        const topShortBlock = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        const topShortBlock = view.dom.querySelector<HTMLElement>(RENDERED_MATH_BLOCK)!;
         const topShortBase = topShortBlock.querySelector<HTMLElement>('.katex-html .katex-base')!;
         const topShortCenterX =
             topShortBase.getBoundingClientRect().left + topShortBase.getBoundingClientRect().width / 2;
@@ -406,7 +427,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         view.dispatch({ effects: EditorView.scrollIntoView(doc.length - 'End'.length, { y: 'end' }) });
         await nextFrames();
 
-        const mathBlocks = Array.from(view.dom.querySelectorAll<HTMLElement>('.cm-enhanced-rendering-math-block'));
+        const mathBlocks = Array.from(view.dom.querySelectorAll<HTMLElement>(RENDERED_MATH_BLOCK));
         expect(mathBlocks.length).toBeGreaterThanOrEqual(2);
         const bottomShortBlock = mathBlocks[mathBlocks.length - 2]!;
         const longBlock = mathBlocks[mathBlocks.length - 1]!;
@@ -442,7 +463,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         view.dom.parentElement!.style.width = '360px';
         await document.fonts.ready;
 
-        const blocks = view.dom.querySelectorAll<HTMLElement>('.cm-enhanced-rendering-math-block');
+        const blocks = view.dom.querySelectorAll<HTMLElement>(RENDERED_MATH_BLOCK);
         const shortBlock = blocks[0]!;
         const shortRect = shortBlock.getBoundingClientRect();
         const shortTerm = shortBlock.querySelector('.katex-base')!.getBoundingClientRect();
@@ -475,7 +496,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         view.dom.parentElement!.style.width = '360px';
         await document.fonts.ready;
 
-        const block = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        const block = view.dom.querySelector<HTMLElement>(RENDERED_MATH_BLOCK)!;
         const terms = Array.from(block.querySelectorAll('.katex-html .katex-base'));
         const finalTerm = terms.pop()!;
         const lastWideTerm = terms.pop()!;
@@ -497,7 +518,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const doc = 'Intro\n\n$$\na \\newline 1\\frac{b}{c} \\tag{1}\n$$';
         const view = track(createBrowserView(doc));
         await document.fonts.ready;
-        const block = view.dom.querySelector('.cm-enhanced-rendering-math-block')!;
+        const block = view.dom.querySelector(RENDERED_MATH_BLOCK)!;
         const terms = block.querySelectorAll('.katex-html .katex-base');
         expect(terms).toHaveLength(2);
         const lastLine = terms[1]!.getBoundingClientRect();
@@ -514,7 +535,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const doc = `Intro\n\n$$\n${equation}\n$$\n\n$$\n${equation} \\tag{1}\n$$`;
         const view = track(createBrowserView(doc));
         await document.fonts.ready;
-        const equations = view.dom.querySelectorAll('.cm-enhanced-rendering-math-block .katex-html');
+        const equations = view.dom.querySelectorAll(`${RENDERED_MATH_BLOCK} .katex-html`);
         expect(equations).toHaveLength(2);
         const untagged = equations[0]!.getBoundingClientRect();
         const tagged = equations[1]!.getBoundingClientRect();
@@ -525,7 +546,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         const doc = 'Intro\n\n$$\na \\newline \\tag{1}\n$$';
         const view = track(createBrowserView(doc));
         await document.fonts.ready;
-        const block = view.dom.querySelector('.cm-enhanced-rendering-math-block')!;
+        const block = view.dom.querySelector(RENDERED_MATH_BLOCK)!;
         const firstLine = block.querySelector('.katex-base')!.getBoundingClientRect();
         const tagText = block.querySelector('.katex-tag .mord')!.getBoundingClientRect();
         expect(tagText.top).toBeGreaterThanOrEqual(firstLine.bottom - 1);
@@ -544,7 +565,7 @@ describe('enhancedRenderingExtension (browser)', () => {
         });
         await nextFrames();
 
-        const block = view.dom.querySelector<HTMLElement>('.cm-enhanced-rendering-math-block')!;
+        const block = view.dom.querySelector<HTMLElement>(RENDERED_MATH_BLOCK)!;
         expect(block.getBoundingClientRect().width).toBeGreaterThan(300);
         expect(block.getBoundingClientRect().width).toBeLessThanOrEqual(360);
     });
@@ -560,11 +581,11 @@ describe('enhancedRenderingExtension (browser)', () => {
         const view = track(createBrowserView(doc, 0, [joplinFocusedSelection]));
 
         const targets: Element[] = [
-            view.dom.querySelector('.cm-enhanced-rendering-mermaid')!,
-            view.dom.querySelector('.cm-enhanced-rendering-mermaid text.pele-label')!,
-            view.dom.querySelector('.cm-enhanced-rendering-mermaid foreignObject.pele-math math')!,
-            view.dom.querySelector('.cm-enhanced-rendering-math-block')!,
-            view.dom.querySelector('.cm-enhanced-rendering-math-block .mord')!,
+            view.dom.querySelector(RENDERED_MERMAID)!,
+            view.dom.querySelector(`${RENDERED_MERMAID} text.pele-label`)!,
+            view.dom.querySelector(`${RENDERED_MERMAID} foreignObject.pele-math math`)!,
+            view.dom.querySelector(RENDERED_MATH_BLOCK)!,
+            view.dom.querySelector(`${RENDERED_MATH_BLOCK} .mord`)!,
         ];
 
         for (const focused of [false, true]) {

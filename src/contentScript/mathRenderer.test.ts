@@ -98,14 +98,14 @@ describe('renderMath', () => {
     });
 
     it('implements widget equality', () => {
-        const inlineRes = renderMath('x^2', false);
-        const blockRes = renderMath('x^2', true);
-        const widgetA = new MathWidget('x^2', false, inlineRes, 1);
-        const widgetB = new MathWidget('x^2', false, inlineRes, 1);
-        const widgetC = new MathWidget('x^2', true, blockRes, 2);
+        const widgetA = new MathWidget('x^2', false, 1);
+        const widgetB = new MathWidget('x^2', false, 1);
+        const widgetC = new MathWidget('x^2', true, 2);
+        const preview = new MathWidget('x^2', false, 1, true);
 
         expect(widgetA.eq(widgetB)).toBe(true);
         expect(widgetA.eq(widgetC)).toBe(false);
+        expect(widgetA.eq(preview)).toBe(false);
         expect(widgetA.ignoreEvent()).toBe(true);
     });
 });
@@ -113,7 +113,7 @@ describe('renderMath', () => {
 describe('MathWidget tagged display math', () => {
     const renderBlock = (tex: string): HTMLElement => {
         const view = new EditorView({ parent: document.createElement('div') });
-        const element = new MathWidget(tex, true, renderMath(tex, true), 3).toDOM(view);
+        const element = new MathWidget(tex, true, 3).toDOM(view);
         view.destroy();
         return element;
     };

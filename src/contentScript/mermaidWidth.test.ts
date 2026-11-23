@@ -1,5 +1,7 @@
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
+import type * as Katex from 'katex';
+import { renderToString } from 'katex';
 import { vi } from 'vitest';
 
 import { blockRenderingExtension } from './blockRenderingField';
@@ -13,6 +15,13 @@ import {
 } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
+
+// Count real KaTeX work: `MathWidget` calls `renderMath` from inside its own module, where a
+// namespace spy cannot observe it.
+vi.mock('katex', async (importOriginal) => {
+    const katex = await importOriginal<typeof Katex>();
+    return { ...katex, renderToString: vi.fn(katex.renderToString) };
+});
 
 class MockResizeObserver {
     public static instances: MockResizeObserver[] = [];
@@ -158,7 +167,8 @@ describe('mermaidWidthExtension', () => {
         const doc =
             'Intro\n\n```mermaid\nflowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Finish]\n```\n\n$$\nx^2 + y^2\n$$';
         const widgetSpy = vi.spyOn(mermaidRenderer, 'MermaidWidget');
-        const mathSpy = vi.spyOn(mathRenderer, 'renderMath');
+        const mathSpy = vi.mocked(renderToString);
+        mathSpy.mockClear();
 
         const firstView = track(createView(doc, 380));
         expect(getMermaidMaxWidth(firstView.state)).toBeNull();

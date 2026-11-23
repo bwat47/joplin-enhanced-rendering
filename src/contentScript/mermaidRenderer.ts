@@ -5,7 +5,7 @@ import { PeleError, render as renderPele } from 'pele';
 
 import { logger } from '../logger';
 import { renderMermaidMath } from './mathRenderer';
-import { attachEditOnClick, dedentLines, LruCache } from './renderUtils';
+import { attachEditOnClick, attachPreviewPointerGuard, dedentLines, LruCache } from './renderUtils';
 
 export interface MermaidBlock {
     from: number;
@@ -193,10 +193,15 @@ export class MermaidWidget extends WidgetType {
 
     private renderedResult: MermaidRenderResult | null = null;
 
+    /**
+     * @param preview Renders a read-only live preview shown below revealed source instead of a
+     *   click-to-edit replacement for it.
+     */
     public constructor(
         private readonly source: string,
         public readonly editOffset: number,
-        maxWidth?: number
+        maxWidth?: number,
+        private readonly preview = false
     ) {
         super();
         this.maxWidth = normalizeMaxWidth(maxWidth);
@@ -213,7 +218,8 @@ export class MermaidWidget extends WidgetType {
             other instanceof MermaidWidget &&
             other.source === this.source &&
             other.editOffset === this.editOffset &&
-            other.maxWidth === this.maxWidth
+            other.maxWidth === this.maxWidth &&
+            other.preview === this.preview
         );
     }
 
@@ -222,7 +228,7 @@ export class MermaidWidget extends WidgetType {
      * re-rendered SVG is identical, and declines (forcing `toDOM`) when the source or click target differs.
      */
     public override updateDOM(dom: HTMLElement, view: EditorView, from: MermaidWidget): boolean {
-        if (from.source !== this.source || from.editOffset !== this.editOffset) {
+        if (from.source !== this.source || from.editOffset !== this.editOffset || from.preview !== this.preview) {
             return false;
         }
 
@@ -245,9 +251,15 @@ export class MermaidWidget extends WidgetType {
         const container = view.dom.ownerDocument.createElement('div');
         container.className = 'cm-enhanced-rendering-block cm-enhanced-rendering-mermaid';
         container.setAttribute('role', 'region');
-        container.setAttribute('aria-label', 'Rendered Mermaid diagram');
         this.fillContainer(container, view);
-        attachEditOnClick(container, view, this.editOffset);
+        if (this.preview) {
+            container.classList.add('cm-enhanced-rendering-preview');
+            container.setAttribute('aria-label', 'Mermaid diagram preview');
+            attachPreviewPointerGuard(container);
+        } else {
+            container.setAttribute('aria-label', 'Rendered Mermaid diagram');
+            attachEditOnClick(container, view, this.editOffset);
+        }
         return container;
     }
 
