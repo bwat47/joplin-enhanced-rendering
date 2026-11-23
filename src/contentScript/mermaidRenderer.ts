@@ -5,7 +5,7 @@ import { PeleError, render as renderPele } from 'pele';
 
 import { logger } from '../logger';
 import { renderMermaidMath } from './mathRenderer';
-import { attachEditOnClick, attachPreviewPointerGuard, dedentLines, LruCache } from './renderUtils';
+import { attachEditOnClick, attachPreviewPointerGuard, dedentLines, HEIGHT_CACHE_SIZE, LruCache } from './renderUtils';
 
 export interface MermaidBlock {
     from: number;
@@ -27,7 +27,7 @@ const INFO_LANGUAGE_PATTERN = /^\s*(\S+)/;
 const mermaidCache = new LruCache<string, MermaidRenderResult>();
 // Last rendered widget height per source at any width, used to estimate off-screen diagrams
 // whose render at the current width has not happened yet.
-const lastKnownHeights = new LruCache<string, number>();
+const lastKnownHeights = new LruCache<string, number>(HEIGHT_CACHE_SIZE);
 
 let widgetInstanceCounter = 0;
 

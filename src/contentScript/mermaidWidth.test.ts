@@ -182,7 +182,8 @@ describe('mermaidWidthExtension', () => {
         expect(widgetSpy).toHaveBeenLastCalledWith(
             'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Finish]',
             expect.any(Number),
-            320
+            320,
+            false
         );
         // Math blocks must not re-render when Mermaid width changes.
         expect(mathSpy).toHaveBeenCalledTimes(1);
@@ -195,7 +196,8 @@ describe('mermaidWidthExtension', () => {
         expect(widgetSpy).toHaveBeenCalledWith(
             'flowchart LR\n  A[Start Process] --> B[Validate Input] --> C[Transform Data] --> D[Finish]',
             expect.any(Number),
-            320
+            320,
+            false
         );
 
         await flushMeasureCycle();
@@ -235,7 +237,8 @@ describe('mermaidWidthExtension', () => {
         expect(widgetSpy).toHaveBeenCalledWith(
             'flowchart LR\n  A[One] --> B[Two] --> C[Three] --> D[Four]',
             expect.any(Number),
-            320
+            320,
+            false
         );
 
         // Start resizing back to 700px, then return to 380px before debounce fires -> zero renders.

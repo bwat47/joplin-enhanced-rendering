@@ -4,6 +4,12 @@ import type { EditorView } from '@codemirror/view';
 import { clearFrozenSelectionEffect } from './pointerRevealFreeze';
 
 /**
+ * Capacity for caches of measured widget heights. Heights are small numbers, so these hold more
+ * entries than the render caches and keep off-screen estimates for notes with many blocks.
+ */
+export const HEIGHT_CACHE_SIZE = 500;
+
+/**
  * Small bounded LRU cache used to memoize rendered SVG/HTML outputs across editor updates.
  */
 export class LruCache<K, V> {
