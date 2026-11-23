@@ -5,7 +5,7 @@ import { ParseError, renderToString } from 'katex';
 import type { MathMarkup } from 'pele';
 
 import { logger } from '../logger';
-import { attachEditOnClick, attachPreviewPointerGuard, LruCache } from './renderUtils';
+import { attachEditOnClick, attachPreviewPointerGuard, HEIGHT_CACHE_SIZE, LruCache } from './renderUtils';
 
 export interface MathExpression {
     from: number;
@@ -24,7 +24,7 @@ const BLOCK_MATH_NODE = 'BlockMath';
 
 const mathCache = new LruCache<string, MathRenderResult>();
 const mermaidMathCache = new LruCache<string, MathMarkup | null>();
-const mathHeightCache = new LruCache<string, number>(500);
+const mathHeightCache = new LruCache<string, number>(HEIGHT_CACHE_SIZE);
 
 let mathProbe: HTMLDivElement | null = null;
 
