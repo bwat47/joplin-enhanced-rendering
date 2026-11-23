@@ -14,7 +14,7 @@ Instead of running its own Markdown parser, the plugin reads Joplin's existing L
 
 CodeMirror 6 requires decorations that replace multi-line blocks to live in a `StateField`, while lightweight inline decorations can be scoped to the viewport in a `ViewPlugin`. The plugin splits rendering along that boundary:
 
-- **Block rendering (`blockRenderingField.ts`)**: A `StateField` managing closed Mermaid fenced code blocks and display math (`$$...$$`). It caches rendered widget decorations across edits and selection changes so unchanged blocks aren't re-rendered as the user types or moves the cursor. Revealed blocks get an uncached live preview widget instead; CodeMirror keeps its DOM while the source is unchanged.
+- **Block rendering (`blockRenderingField.ts`)**: A `StateField` managing closed Mermaid fenced code blocks and display math (`$$...$$`). It rebuilds its block list and widget decorations from the syntax tree on every edit, and on selection changes only when a block is revealed or rendered. Rebuilding is cheap: widgets render lazily when mounted, the renderers cache their output, and CodeMirror keeps a mounted widget's DOM when the new widget is `eq` to the old one, so unchanged blocks aren't re-rendered as the user types or moves the cursor. Revealed blocks get a live preview widget instead.
 - **Inline math (`inlineMathPlugin.ts`)**: A `ViewPlugin` that inspects only the currently visible viewport for inline math (`$...$`) and replaces non-selected expressions with inline KaTeX widgets.
 
 ### Syntax Tree Integration
@@ -34,22 +34,22 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 
 - **Mermaid (`mermaidRenderer.ts`, `mermaidWidth.ts`)**: Synchronously renders diagrams to responsive SVGs via Pele (with external images/links disabled for safety) and shows inline error widgets on invalid syntax. An editor-level width tracker quantizes and debounces the available width into coarse `maxWidth` buckets (reused across note switches) so narrow panes and mobile viewports get adaptive layouts without resize thrashing. Widgets render lazily when mounted, so width changes only re-render visible diagrams and keep the existing DOM when the SVG is unchanged.
 - **Math (`mathRenderer.ts`)**: Synchronously renders LaTeX via KaTeX (with untrusted commands disabled) when a widget mounts, so off-screen math never runs KaTeX. It also provides math rendering for `$$...$$` labels inside Mermaid diagrams.
-- **Caching**: Both renderers use bounded LRU caches, and the block field reuses widget decorations when block content hasn't changed.
+- **Caching**: Both renderers use bounded LRU caches keyed by source (and Mermaid width bucket). These, plus widget `eq`, are the only render caches; the block field holds no decoration cache of its own.
 
 ## Module Map
 
-| Module                                     | Responsibility                                                                                     |
-| ------------------------------------------ | -------------------------------------------------------------------------------------------------- |
-| `src/index.ts`                             | Registers the CodeMirror 6 content script with Joplin.                                             |
-| `src/contentScript/enhancedRendering.ts`   | Wires together extensions, light/dark theme styling, and CSS assets.                               |
-| `src/contentScript/blockRenderingField.ts` | `StateField` for Mermaid and display math block widgets, live previews, caching, and cursor entry. |
-| `src/contentScript/inlineMathPlugin.ts`    | Viewport-scoped `ViewPlugin` for inline `$...$` math widgets.                                      |
-| `src/contentScript/pointerRevealFreeze.ts` | Freezes reveal/collapse state during pointer drag gestures.                                        |
-| `src/contentScript/mermaidRenderer.ts`     | Mermaid extraction, Pele SVG rendering, and `MermaidWidget`.                                       |
-| `src/contentScript/mermaidWidth.ts`        | Editor-level quantized, debounced width tracker feeding Pele's adaptive `maxWidth`.                |
-| `src/contentScript/mathRenderer.ts`        | Math extraction, KaTeX rendering, Mermaid math integration, and `MathWidget`.                      |
-| `src/contentScript/renderUtils.ts`         | Shared LRU cache, selection intersection checks, click-to-edit, and indentation helpers.           |
-| `src/logger.ts`                            | Logging wrapper.                                                                                   |
+| Module                                     | Responsibility                                                                            |
+| ------------------------------------------ | ----------------------------------------------------------------------------------------- |
+| `src/index.ts`                             | Registers the CodeMirror 6 content script with Joplin.                                    |
+| `src/contentScript/enhancedRendering.ts`   | Wires together extensions, light/dark theme styling, and CSS assets.                      |
+| `src/contentScript/blockRenderingField.ts` | `StateField` for Mermaid and display math block widgets, live previews, and cursor entry. |
+| `src/contentScript/inlineMathPlugin.ts`    | Viewport-scoped `ViewPlugin` for inline `$...$` math widgets.                             |
+| `src/contentScript/pointerRevealFreeze.ts` | Freezes reveal/collapse state during pointer drag gestures.                               |
+| `src/contentScript/mermaidRenderer.ts`     | Mermaid extraction, Pele SVG rendering, and `MermaidWidget`.                              |
+| `src/contentScript/mermaidWidth.ts`        | Editor-level quantized, debounced width tracker feeding Pele's adaptive `maxWidth`.       |
+| `src/contentScript/mathRenderer.ts`        | Math extraction, KaTeX rendering, Mermaid math integration, and `MathWidget`.             |
+| `src/contentScript/renderUtils.ts`         | Shared LRU cache, selection intersection checks, click-to-edit, and indentation helpers.  |
+| `src/logger.ts`                            | Logging wrapper.                                                                          |
 
 ## Build & Packaging
 

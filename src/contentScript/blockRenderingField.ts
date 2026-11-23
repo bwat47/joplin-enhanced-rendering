@@ -2,9 +2,7 @@ import { syntaxTree } from '@codemirror/language';
 import {
     EditorSelection,
     EditorState,
-    MapMode,
     StateField,
-    type ChangeDesc,
     type Extension,
     type Range,
     type Text,
@@ -21,230 +19,61 @@ import { rangeIntersectsSelection } from './renderUtils';
 
 type BlockKind = 'mermaid' | 'math';
 
-const EMPTY_BLOCK_CACHE: ReadonlyMap<string, CachedBlockDecoration> = new Map();
-
 interface BlockEntry {
     readonly kind: BlockKind;
     readonly source: string;
     readonly replaceFrom: number;
     readonly replaceTo: number;
     readonly editOffset: number;
-    readonly decoration: Range<Decoration> | null;
-    /** Live preview shown below the source while the block is revealed; null while rendered. */
-    readonly preview: Range<Decoration> | null;
+    /** False while the selection reveals the block's source. */
     readonly rendered: boolean;
-}
-
-interface CachedBlockDecoration {
-    readonly decoration: Decoration;
-    readonly ends: Set<number>;
 }
 
 interface BlockRenderingState {
     readonly blocks: readonly BlockEntry[];
     readonly decorations: DecorationSet;
-    readonly cache: ReadonlyMap<string, CachedBlockDecoration>;
-}
-
-function mermaidCachePrefix(mermaidMaxWidth: number | null): string {
-    return `mermaid:${mermaidMaxWidth ?? 'auto'}:`;
-}
-
-function blockCacheKey(kind: BlockKind, editOffset: number, source: string, mermaidMaxWidth: number | null): string {
-    return kind === 'mermaid'
-        ? `${mermaidCachePrefix(mermaidMaxWidth)}${editOffset}:${source}`
-        : `${kind}:${editOffset}:${source}`;
-}
-
-function recordCachedDecoration(
-    cache: Map<string, CachedBlockDecoration>,
-    key: string,
-    decoration: Decoration,
-    to: number,
-    previousCache?: ReadonlyMap<string, CachedBlockDecoration>
-): void {
-    const existing = cache.get(key);
-    // Identical blocks share the render, but each occurrence must survive edits independently.
-    if (existing && existing !== previousCache?.get(key)) {
-        existing.ends.add(to);
-    } else {
-        cache.set(key, { decoration, ends: new Set(existing?.ends).add(to) });
-    }
-}
-
-function retainUnparsedCacheEntries(
-    parsedTo: number,
-    docLength: number,
-    previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    changes: ChangeDesc | null,
-    mermaidMaxWidth: number | null
-): Map<string, CachedBlockDecoration> {
-    const retained = new Map<string, CachedBlockDecoration>();
-    if (parsedTo >= docLength) {
-        return retained;
-    }
-
-    const activeMermaidPrefix = mermaidCachePrefix(mermaidMaxWidth);
-    // The outer Markdown tree can cover a block even when an earlier fenced language was skipped.
-    for (const [key, entry] of previousCache) {
-        if (key.startsWith('mermaid:') && !key.startsWith(activeMermaidPrefix)) {
-            continue;
-        }
-        for (const to of entry.ends) {
-            // Keep the endpoint attached to the block's last character, including at insertions.
-            const mappedTo = changes ? changes.mapPos(to, -1, MapMode.TrackBefore) : to;
-            if (mappedTo !== null && mappedTo > parsedTo) {
-                recordCachedDecoration(retained, key, entry.decoration, mappedTo);
-            }
-        }
-    }
-
-    return retained;
-}
-
-function retainNonMermaidCacheEntries(
-    previousCache: ReadonlyMap<string, CachedBlockDecoration>
-): Map<string, CachedBlockDecoration> {
-    const retained = new Map<string, CachedBlockDecoration>();
-    for (const [key, entry] of previousCache) {
-        if (!key.startsWith('mermaid:')) {
-            retained.set(key, entry);
-        }
-    }
-    return retained;
-}
-
-function recordRevealedBlockOccurrences(
-    blocks: readonly BlockEntry[],
-    cache: Map<string, CachedBlockDecoration> | null,
-    mermaidMaxWidth: number | null,
-    previousCache?: ReadonlyMap<string, CachedBlockDecoration>
-): void {
-    if (!cache) {
-        return;
-    }
-
-    for (const block of blocks) {
-        if (block.decoration) {
-            continue;
-        }
-        const key = blockCacheKey(block.kind, block.editOffset, block.source, mermaidMaxWidth);
-        const cached = cache.get(key);
-        // A duplicate can acquire a shared render after this occurrence was processed.
-        if (cached && !cached.ends.has(block.replaceTo)) {
-            recordCachedDecoration(cache, key, cached.decoration, block.replaceTo, previousCache);
-        }
-    }
-}
-
-function createBlockDecoration(
-    kind: BlockKind,
-    source: string,
-    replaceFrom: number,
-    replaceTo: number,
-    editOffset: number,
-    mermaidMaxWidth: number | null,
-    cached?: Decoration
-): Range<Decoration> {
-    if (cached) {
-        return cached.range(replaceFrom, replaceTo);
-    }
-
-    const widget =
-        kind === 'mermaid'
-            ? new MermaidWidget(source, editOffset, mermaidMaxWidth ?? undefined)
-            : new MathWidget(source, true, editOffset);
-    return Decoration.replace({ widget, block: true }).range(replaceFrom, replaceTo);
 }
 
 /**
- * Creates the read-only widget placed after a revealed block's closing line so its rendered output
- * stays visible below the source while editing. Widgets are cheap to recreate: both kinds render
- * lazily when mounted, and CodeMirror keeps the mounted DOM when the new widget is `eq` to the old one.
+ * Creates the widget decoration for a block: a click-to-edit replacement while rendered, or a
+ * read-only live preview after the closing line while revealed.
+ *
+ * Decorations are rebuilt freely. Widgets render lazily when mounted, the renderers cache their
+ * output, and CodeMirror keeps the mounted DOM when a new widget is `eq` to the old one.
  */
-function createPreviewDecoration(
-    kind: BlockKind,
-    source: string,
-    replaceTo: number,
-    mermaidMaxWidth: number | null
-): Range<Decoration> {
+function createBlockDecoration(block: BlockEntry, mermaidMaxWidth: number | null): Range<Decoration> {
+    const { kind, source, rendered } = block;
+    const editOffset = rendered ? block.editOffset : 0;
+    const preview = !rendered;
     const widget =
         kind === 'mermaid'
-            ? new MermaidWidget(source, 0, mermaidMaxWidth ?? undefined, true)
-            : new MathWidget(source, true, 0, true);
-    return Decoration.widget({ widget, block: true, side: 1 }).range(replaceTo);
+            ? new MermaidWidget(source, editOffset, mermaidMaxWidth ?? undefined, preview)
+            : new MathWidget(source, true, editOffset, preview);
+
+    return rendered
+        ? Decoration.replace({ widget, block: true }).range(block.replaceFrom, block.replaceTo)
+        : Decoration.widget({ widget, block: true, side: 1 }).range(block.replaceTo);
 }
 
-function activeDecoration(entry: BlockEntry): Range<Decoration> | null {
-    return entry.rendered ? entry.decoration : entry.preview;
+function createBlockState(blocks: readonly BlockEntry[], mermaidMaxWidth: number | null): BlockRenderingState {
+    const decorations = blocks.map((block) => createBlockDecoration(block, mermaidMaxWidth));
+    return { blocks, decorations: Decoration.set(decorations, true) };
 }
 
-function createBlockEntry(
-    kind: BlockKind,
-    source: string,
-    replaceFrom: number,
-    replaceTo: number,
-    editOffset: number,
-    revealSelection: EditorSelection,
-    mermaidMaxWidth: number | null,
-    previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    nextCache: Map<string, CachedBlockDecoration>
-): BlockEntry {
-    const key = blockCacheKey(kind, editOffset, source, mermaidMaxWidth);
-    const rendered = !rangeIntersectsSelection(revealSelection, replaceFrom, replaceTo);
-    const reused = (nextCache.get(key) ?? previousCache.get(key))?.decoration;
-    const decoration =
-        rendered || reused
-            ? createBlockDecoration(kind, source, replaceFrom, replaceTo, editOffset, mermaidMaxWidth, reused)
-            : null;
-
-    if (decoration) {
-        recordCachedDecoration(nextCache, key, decoration.value, replaceTo);
-    }
-
-    const preview = rendered ? null : createPreviewDecoration(kind, source, replaceTo, mermaidMaxWidth);
-    return { kind, source, replaceFrom, replaceTo, editOffset, decoration, preview, rendered };
-}
-
-function buildBlockState(
-    state: EditorState,
-    previousCache: ReadonlyMap<string, CachedBlockDecoration> = new Map(),
-    changes: ChangeDesc | null = null
-): BlockRenderingState {
+function collectBlocks(state: EditorState): BlockEntry[] {
     const blocks: BlockEntry[] = [];
-    const activeDecorations: Range<Decoration>[] = [];
     const revealSelection = getRevealSelection(state);
-    const mermaidMaxWidth = getMermaidMaxWidth(state);
-    const tree = syntaxTree(state);
-    const nextCache = retainUnparsedCacheEntries(
-        tree.length,
-        state.doc.length,
-        previousCache,
-        changes,
-        mermaidMaxWidth
-    );
+    const addBlock = (kind: BlockKind, source: string, replaceFrom: number, replaceTo: number, editOffset: number) => {
+        const rendered = !rangeIntersectsSelection(revealSelection, replaceFrom, replaceTo);
+        blocks.push({ kind, source, replaceFrom, replaceTo, editOffset, rendered });
+    };
 
-    tree.iterate({
+    syntaxTree(state).iterate({
         enter(node) {
             if (node.name === 'FencedCode') {
                 const block = extractMermaidBlock(state, node);
                 if (block) {
-                    const entry = createBlockEntry(
-                        'mermaid',
-                        block.source,
-                        block.replaceFrom,
-                        block.replaceTo,
-                        block.editOffset,
-                        revealSelection,
-                        mermaidMaxWidth,
-                        previousCache,
-                        nextCache
-                    );
-                    blocks.push(entry);
-                    const active = activeDecoration(entry);
-                    if (active) {
-                        activeDecorations.push(active);
-                    }
+                    addBlock('mermaid', block.source, block.replaceFrom, block.replaceTo, block.editOffset);
                 }
                 return false;
             }
@@ -252,22 +81,7 @@ function buildBlockState(
             if (node.name === 'BlockMath') {
                 const expr = extractBlockMath(state, node);
                 if (expr) {
-                    const entry = createBlockEntry(
-                        'math',
-                        expr.tex,
-                        expr.replaceFrom,
-                        expr.replaceTo,
-                        expr.editOffset,
-                        revealSelection,
-                        mermaidMaxWidth,
-                        previousCache,
-                        nextCache
-                    );
-                    blocks.push(entry);
-                    const active = activeDecoration(entry);
-                    if (active) {
-                        activeDecorations.push(active);
-                    }
+                    addBlock('math', expr.tex, expr.replaceFrom, expr.replaceTo, expr.editOffset);
                 }
                 return false;
             }
@@ -276,157 +90,16 @@ function buildBlockState(
         },
     });
 
-    recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth);
-
-    return {
-        blocks,
-        decorations: Decoration.set(activeDecorations, true),
-        cache: nextCache,
-    };
+    return blocks;
 }
 
-function resolveBlockDecoration(
-    block: BlockEntry,
-    previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    nextCache: Map<string, CachedBlockDecoration> | null,
-    mermaidMaxWidth: number | null
-): { decoration: Range<Decoration>; nextCache: Map<string, CachedBlockDecoration> | null } {
-    const key = blockCacheKey(block.kind, block.editOffset, block.source, mermaidMaxWidth);
-    const cached = (nextCache ?? previousCache).get(key);
-    const decoration = createBlockDecoration(
-        block.kind,
-        block.source,
-        block.replaceFrom,
-        block.replaceTo,
-        block.editOffset,
-        mermaidMaxWidth,
-        cached?.decoration
-    );
-    if (!cached?.ends.has(block.replaceTo)) {
-        nextCache ??= new Map(previousCache);
-        recordCachedDecoration(nextCache, key, decoration.value, block.replaceTo, previousCache);
-    }
-    return { decoration, nextCache };
-}
-
-/**
- * Applies `revealSelection` to an existing block: rendered blocks get a decoration (reused from
- * the cache when possible) and revealed blocks keep theirs for later reuse while showing a live
- * preview below their source. Returns the original entry when nothing changed. `nextCache` is
- * created lazily from `previousCache` on first write.
- */
-function updateBlockForSelection(
-    block: BlockEntry,
-    revealSelection: EditorSelection,
-    previousCache: ReadonlyMap<string, CachedBlockDecoration>,
-    nextCache: Map<string, CachedBlockDecoration> | null,
-    mermaidMaxWidth: number | null
-): { entry: BlockEntry; nextCache: Map<string, CachedBlockDecoration> | null } {
-    const shouldRender = !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo);
-    let decoration = block.decoration;
-    if (shouldRender && !decoration) {
-        ({ decoration, nextCache } = resolveBlockDecoration(block, previousCache, nextCache, mermaidMaxWidth));
-    }
-
-    const preview = shouldRender
-        ? null
-        : (block.preview ?? createPreviewDecoration(block.kind, block.source, block.replaceTo, mermaidMaxWidth));
-
-    const entry =
-        shouldRender === block.rendered && decoration === block.decoration && preview === block.preview
-            ? block
-            : { ...block, decoration, preview, rendered: shouldRender };
-    return { entry, nextCache };
-}
-
-function updateBlockStateForMermaidWidth(
-    previous: BlockRenderingState,
-    revealSelection: EditorSelection,
-    mermaidMaxWidth: number | null
-): BlockRenderingState {
-    const nextCache = retainNonMermaidCacheEntries(previous.cache);
-    const blocks: BlockEntry[] = [];
-    const activeDecorations: Range<Decoration>[] = [];
-
-    for (const block of previous.blocks) {
-        const entry =
-            block.kind === 'mermaid'
-                ? createBlockEntry(
-                      'mermaid',
-                      block.source,
-                      block.replaceFrom,
-                      block.replaceTo,
-                      block.editOffset,
-                      revealSelection,
-                      mermaidMaxWidth,
-                      EMPTY_BLOCK_CACHE,
-                      nextCache
-                  )
-                : updateBlockForSelection(block, revealSelection, previous.cache, nextCache, mermaidMaxWidth).entry;
-
-        blocks.push(entry);
-        const active = activeDecoration(entry);
-        if (active) {
-            activeDecorations.push(active);
-        }
-    }
-
-    // Math entries in `nextCache` are shared with `previous.cache`; passing it lets
-    // `recordCachedDecoration` copy them before adding ends instead of mutating previous state.
-    recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth, previous.cache);
-
-    return {
-        blocks,
-        decorations: Decoration.set(activeDecorations, true),
-        cache: nextCache,
-    };
-}
-
-function updateBlockStateForSelection(
-    previous: BlockRenderingState,
-    revealSelection: EditorSelection,
-    mermaidMaxWidth: number | null
-): BlockRenderingState {
-    let changed = false;
-    for (const block of previous.blocks) {
-        const shouldRender = !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo);
-        if (shouldRender !== block.rendered) {
-            changed = true;
-            break;
-        }
-    }
-
-    if (!changed) {
-        return previous;
-    }
-
-    const blocks: BlockEntry[] = [];
-    const activeDecorations: Range<Decoration>[] = [];
-    let nextCache: Map<string, CachedBlockDecoration> | null = null;
-
-    for (const block of previous.blocks) {
-        let entry: BlockEntry;
-        ({ entry, nextCache } = updateBlockForSelection(
-            block,
-            revealSelection,
-            previous.cache,
-            nextCache,
-            mermaidMaxWidth
-        ));
-        blocks.push(entry);
-        const active = activeDecoration(entry);
-        if (active) {
-            activeDecorations.push(active);
-        }
-    }
-
-    recordRevealedBlockOccurrences(blocks, nextCache, mermaidMaxWidth, previous.cache);
-
-    return {
-        blocks,
-        decorations: Decoration.set(activeDecorations, true),
-        cache: nextCache ?? previous.cache,
-    };
+/** Returns `blocks` itself when the selection change doesn't reveal or render any block. */
+function applyRevealSelection(blocks: readonly BlockEntry[], revealSelection: EditorSelection): readonly BlockEntry[] {
+    const next = blocks.map((block) => {
+        const rendered = !rangeIntersectsSelection(revealSelection, block.replaceFrom, block.replaceTo);
+        return rendered === block.rendered ? block : { ...block, rendered };
+    });
+    return next.some((block, i) => block !== blocks[i]) ? next : blocks;
 }
 
 /**
@@ -436,24 +109,22 @@ function updateBlockStateForSelection(
  */
 const blockRenderingField = StateField.define<BlockRenderingState>({
     create(state): BlockRenderingState {
-        return buildBlockState(state);
+        return createBlockState(collectBlocks(state), getMermaidMaxWidth(state));
     },
     update(value, transaction): BlockRenderingState {
-        const treeChanged = syntaxTree(transaction.state) !== syntaxTree(transaction.startState);
-        if (transaction.docChanged || treeChanged) {
-            return buildBlockState(transaction.state, value.cache, transaction.docChanged ? transaction.changes : null);
+        const state = transaction.state;
+        const mermaidMaxWidth = getMermaidMaxWidth(state);
+        if (transaction.docChanged || syntaxTree(state) !== syntaxTree(transaction.startState)) {
+            return createBlockState(collectBlocks(state), mermaidMaxWidth);
         }
 
-        const mermaidMaxWidth = getMermaidMaxWidth(transaction.state);
-        if (hasMermaidMaxWidthChanged(transaction.startState, transaction.state)) {
-            return updateBlockStateForMermaidWidth(value, getRevealSelection(transaction.state), mermaidMaxWidth);
+        const widthChanged = hasMermaidMaxWidthChanged(transaction.startState, state);
+        if (!widthChanged && !hasRevealSelectionChanged(transaction.startState, state)) {
+            return value;
         }
 
-        if (hasRevealSelectionChanged(transaction.startState, transaction.state)) {
-            return updateBlockStateForSelection(value, getRevealSelection(transaction.state), mermaidMaxWidth);
-        }
-
-        return value;
+        const blocks = applyRevealSelection(value.blocks, getRevealSelection(state));
+        return widthChanged || blocks !== value.blocks ? createBlockState(blocks, mermaidMaxWidth) : value;
     },
     provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
 });
