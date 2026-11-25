@@ -105,8 +105,9 @@ export function applyGesture(
     const midAfter = midpoint(firstAfter, secondAfter);
     const panned = panBy(transform, midpoint(firstBefore, secondBefore), midAfter);
     const distanceBefore = distance(firstBefore, secondBefore);
-    return distanceBefore > 0
-        ? zoomAround(panned, distance(firstAfter, secondAfter) / distanceBefore, midAfter, limits)
+    const distanceAfter = distance(firstAfter, secondAfter);
+    return distanceBefore > 0 && distanceAfter > 0
+        ? zoomAround(panned, distanceAfter / distanceBefore, midAfter, limits)
         : panned;
 }
 

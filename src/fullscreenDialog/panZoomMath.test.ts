@@ -80,6 +80,19 @@ describe('applyGesture', () => {
         expect(applyGesture(start, before, after, LIMITS)).toEqual({ x: 5, y: 5, scale: 1 });
     });
 
+    it('pans without snapping scale when two pointers coincide after moving', () => {
+        const before = [
+            { x: 90, y: 100 },
+            { x: 110, y: 100 },
+        ];
+        const after = [
+            { x: 105, y: 110 },
+            { x: 105, y: 110 },
+        ];
+
+        expect(applyGesture(start, before, after, LIMITS)).toEqual({ x: 5, y: 10, scale: 1 });
+    });
+
     it('ignores moves without pointers', () => {
         expect(applyGesture(start, [], [], LIMITS)).toBe(start);
     });
