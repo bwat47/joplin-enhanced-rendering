@@ -137,9 +137,13 @@ export interface RenderedBlockSpan {
 
 /** Returns the replaced ranges of every block currently drawn as a widget, in document order. */
 export function getRenderedBlockSpans(state: EditorState): readonly RenderedBlockSpan[] {
-    return state
-        .field(blockRenderingField)
-        .blocks.filter((block) => block.rendered)
+    const field = state.field(blockRenderingField, false);
+    if (!field) {
+        return [];
+    }
+
+    return field.blocks
+        .filter((block) => block.rendered)
         .map((block) => ({ from: block.replaceFrom, to: block.replaceTo }));
 }
 

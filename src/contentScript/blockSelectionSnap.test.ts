@@ -115,4 +115,13 @@ describe('blockSelectionSnapFilter', () => {
         }).state.selection.main;
         expect([programmatic.anchor, programmatic.head]).toEqual([MERMAID_FROM, MERMAID_FROM + 3]);
     });
+
+    it('is a no-op when blockRenderingExtension is not installed', () => {
+        const state = EditorState.create({
+            doc: DOC,
+            extensions: [blockSelectionSnapFilter],
+        });
+        const range = select(state, 0, MERMAID_FROM + 5).main;
+        expect([range.anchor, range.head]).toEqual([0, MERMAID_FROM + 5]);
+    });
 });

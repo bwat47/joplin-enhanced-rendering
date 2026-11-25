@@ -60,7 +60,13 @@ export function snapSelectionToBlocks(
  * sequential spec only replaces its selection.
  */
 export const blockSelectionSnapFilter: Extension = EditorState.transactionFilter.of((tr) => {
-    if (tr.docChanged || !tr.selection || !tr.isUserEvent('select') || tr.isUserEvent('select.search')) {
+    if (
+        tr.docChanged ||
+        !tr.selection ||
+        !tr.isUserEvent('select') ||
+        tr.isUserEvent('select.search') ||
+        tr.selection.ranges.every((range) => range.empty)
+    ) {
         return tr;
     }
 
