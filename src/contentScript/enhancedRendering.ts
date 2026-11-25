@@ -56,7 +56,7 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '.cm-enhanced-rendering-preview': {
         cursor: 'default',
         boxShadow:
-            'inset 3px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5)), inset -3px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
+            'inset 2px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5)), inset -2px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
     },
     // `&.cm-focused` copies outrank Joplin's `&.cm-focused ::selection` (`!important`, 0,2,1)
     // regardless of stylesheet order.
