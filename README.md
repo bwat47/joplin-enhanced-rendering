@@ -7,6 +7,14 @@ Render Mermaid diagrams (via [Pele](https://github.com/obsidianmd/pele)) and inl
 
 ![example screenshot](https://github.com/bwat47/joplin-enhanced-rendering/blob/main/images/example.png)
 
+## Usage
+
+When the plugin is enabled, mermaid and math syntax are automatically rendered in the markdown editor (visually replacing the syntax).
+
+Left clicking on rendered content will reveal the markdown syntax. For math blocks and mermaid diagrams, the rendered preview will continue to show below the markdown syntax, so you can see changes as you edit.
+
+Clicking the full screen button on the top-right of a Mermaid diagram will open a fullscreen dialog where you can pan/zoom the diagram.
+
 ## Requirements
 
 - Joplin 3.7 or newer
@@ -26,8 +34,6 @@ Install from Joplin's plugin manager, or install the `.jpl` file manually:
 - This plugin changes editor display only. It does not modify note content.
 
 - Math rendering requires "Enable math expressions (wysiwyg: yes)" to be enabled under Tools | Options | Markdown (otherwise the syntax tree nodes for math aren't available in the editor).
-
-- Hover a rendered Mermaid diagram and click the button in its top-right corner to open it in a full-screen dialog. Drag to pan, scroll or pinch to zoom, and double-click to fit it to the window.
 
 - Mermaid diagrams can appear differently than in the Markdown viewer due to the different library being used to render them.
 
