@@ -3,6 +3,8 @@ import {
     cursorDocStart,
     cursorLineDown,
     cursorLineUp,
+    selectCharLeft,
+    selectCharRight,
     selectLineDown,
     selectLineUp,
 } from '@codemirror/commands';
@@ -272,12 +274,23 @@ describe('enhancedRenderingExtension (browser)', () => {
         }
     });
 
-    it('selects a rendered block whole when Shift+ArrowDown or Shift+ArrowUp crosses it', () => {
+    it('snaps keyboard selection into a rendered block to cover all of it', () => {
         const mermaid = '```mermaid\nflowchart LR\n  A --> B\n```';
         const doc = `Heading\n\n${mermaid}\n\nFooter`;
         const from = doc.indexOf(mermaid);
         const to = from + mermaid.length;
 
+        // Shift+ArrowRight onto the opening boundary would otherwise stop at `from`.
+        const right = track(createBrowserView(doc, from - 1));
+        selectCharRight(right);
+        expect([right.state.selection.main.anchor, right.state.selection.main.head]).toEqual([from - 1, to]);
+
+        // Shift+ArrowLeft onto the closing boundary would otherwise stop at `to`.
+        const left = track(createBrowserView(doc, to + 1));
+        selectCharLeft(left);
+        expect([left.state.selection.main.anchor, left.state.selection.main.head]).toEqual([to + 1, from]);
+
+        // Shift+ArrowDown/Up crossing the block still covers all of it.
         const down = track(createBrowserView(doc, 0));
         selectLineDown(down);
         selectLineDown(down);
