@@ -2,7 +2,7 @@
     "manifest_version": 1,
     "id": "com.bwat47.joplin-enhanced-rendering",
     "app_min_version": "3.7",
-    "version": "0.3.0",
+    "version": "0.4.0",
     "platforms": ["desktop", "mobile"],
     "name": "Enhanced Rendering",
     "description": "Render Mermaid diagrams and KaTeX math directly in Joplin's Markdown editor",
