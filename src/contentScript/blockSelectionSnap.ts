@@ -50,9 +50,8 @@ export function snapSelectionToBlocks(
 
 /**
  * Snaps user selection gestures to cover every block rendered in the start state, so extending a
- * selection (Shift+Arrow, mouse drag, Shift+click) into a diagram or display math block selects
- * all of it. Blocks already revealed for editing are left alone, so their source can be selected
- * freely.
+ * selection (Shift+Arrow or mouse drag) into a diagram or display math block selects all of it.
+ * Blocks already revealed for editing are left alone, so their source can be selected freely.
  *
  * Document changes, search matches (`select.search`), and programmatic selections are left alone:
  * this exists for interactive selection gestures, and edits or search decide their own selection.
