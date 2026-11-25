@@ -86,13 +86,14 @@ const enhancedRenderingTheme = EditorView.baseTheme({
         cursor: 'pointer',
         transition: 'opacity 120ms ease',
     },
-    '.cm-enhanced-rendering-fullscreen-button:hover': {
-        backgroundColor: 'var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15))',
-    },
-    // Reveal on hover where the device can hover; touch devices keep the button visible.
+    // Reveal and highlight on hover where the device can hover; touch devices keep the button
+    // visible without sticky :hover highlights after a tap.
     '@media (hover: hover)': {
         '.cm-enhanced-rendering-fullscreen-button': {
             opacity: '0',
+        },
+        '.cm-enhanced-rendering-fullscreen-button:hover': {
+            backgroundColor: 'var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15))',
         },
         '.cm-enhanced-rendering-mermaid:hover > .cm-enhanced-rendering-fullscreen-button, .cm-enhanced-rendering-fullscreen-button:focus-visible':
             {
