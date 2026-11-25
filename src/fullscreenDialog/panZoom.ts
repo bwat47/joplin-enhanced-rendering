@@ -79,7 +79,11 @@ function attachViewer(root: HTMLElement): Viewer | null {
             return;
         }
 
-        viewport.setPointerCapture(event.pointerId);
+        try {
+            viewport.setPointerCapture(event.pointerId);
+        } catch {
+            // Synthetic or already-ended pointers cannot be captured.
+        }
         pointers.set(event.pointerId, viewportPoint(event));
         viewport.classList.add('er-fullscreen__viewport--panning');
     };
@@ -137,6 +141,7 @@ function attachViewer(root: HTMLElement): Viewer | null {
     viewport.addEventListener('pointermove', onPointerMove);
     viewport.addEventListener('pointerup', onPointerEnd);
     viewport.addEventListener('pointercancel', onPointerEnd);
+    viewport.addEventListener('lostpointercapture', onPointerEnd);
     viewport.addEventListener('wheel', onWheel, { passive: false });
     viewport.addEventListener('dblclick', fit);
     root.addEventListener('click', onToolbarClick);

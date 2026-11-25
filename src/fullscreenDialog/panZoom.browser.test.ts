@@ -117,4 +117,32 @@ describe('full-screen pan/zoom viewer (browser)', () => {
         expect(stageTransform().a).toBeLessThan(initialScale);
         expect(stageTransform().a).toBeCloseTo(0.5, 1);
     });
+
+    it('clears pointer state when pointer capture is lost', async () => {
+        await import('./panZoom');
+        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 6);
+        await nextFrames();
+
+        const viewport = document.querySelector<HTMLElement>('.er-fullscreen__viewport')!;
+        const viewportRect = viewport.getBoundingClientRect();
+        const x = viewportRect.left + 100;
+        const y = viewportRect.top + 100;
+
+        viewport.dispatchEvent(
+            new PointerEvent('pointerdown', { pointerId: 1, pointerType: 'mouse', button: 0, clientX: x, clientY: y })
+        );
+        expect(viewport.classList.contains('er-fullscreen__viewport--panning')).toBe(true);
+
+        viewport.dispatchEvent(new PointerEvent('lostpointercapture', { pointerId: 1 }));
+        expect(viewport.classList.contains('er-fullscreen__viewport--panning')).toBe(false);
+
+        const before = stageTransform();
+        const nextPointer = { pointerId: 2, pointerType: 'mouse', button: 0 };
+        viewport.dispatchEvent(new PointerEvent('pointerdown', { ...nextPointer, clientX: x + 20, clientY: y }));
+        viewport.dispatchEvent(new PointerEvent('pointermove', { ...nextPointer, clientX: x + 50, clientY: y }));
+        viewport.dispatchEvent(new PointerEvent('pointerup', { ...nextPointer, clientX: x + 50, clientY: y }));
+
+        expect(stageTransform().a).toBeCloseTo(before.a);
+        expect(stageTransform().e - before.e).toBeCloseTo(30);
+    });
 });
