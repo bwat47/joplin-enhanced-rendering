@@ -47,11 +47,12 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '.cm-enhanced-rendering-block:not(.cm-enhanced-rendering-preview):hover': {
         borderColor: 'var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
     },
-    // Live preview below revealed block source. An inset shadow marks it without changing the
+    // Live preview below revealed block source. Inset shadows frame it without changing the
     // border box that Mermaid width measurement budgets for.
     '.cm-enhanced-rendering-preview': {
         cursor: 'default',
-        boxShadow: 'inset 3px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
+        boxShadow:
+            'inset 3px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5)), inset -3px 0 0 var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
     },
     // `&.cm-focused` copies outrank Joplin's `&.cm-focused ::selection` (`!important`, 0,2,1)
     // regardless of stylesheet order.
