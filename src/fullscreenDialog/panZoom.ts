@@ -103,6 +103,9 @@ function attachViewer(root: HTMLElement): Viewer | null {
 
     const onWheel = (event: WheelEvent): void => {
         event.preventDefault();
+        if (event.deltaY === 0) {
+            return;
+        }
         zoomBy(wheelZoomFactor(event.deltaY, event.deltaMode), viewportPoint(event));
     };
 

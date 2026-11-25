@@ -100,4 +100,21 @@ describe('full-screen pan/zoom viewer (browser)', () => {
         document.dispatchEvent(disposedKeydown);
         expect(disposedKeydown.defaultPrevented).toBe(false);
     });
+
+    it('keeps auto-fit active after horizontal-only wheel events', async () => {
+        await import('./panZoom');
+        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 5);
+        await nextFrames();
+
+        const root = document.querySelector<HTMLElement>('.er-fullscreen')!;
+        const viewport = document.querySelector<HTMLElement>('.er-fullscreen__viewport')!;
+        const initialScale = stageTransform().a;
+
+        viewport.dispatchEvent(new WheelEvent('wheel', { deltaX: 50, deltaY: 0, bubbles: true, cancelable: true }));
+        root.style.width = '232px';
+        await nextFrames();
+
+        expect(stageTransform().a).toBeLessThan(initialScale);
+        expect(stageTransform().a).toBeCloseTo(0.5, 1);
+    });
 });
