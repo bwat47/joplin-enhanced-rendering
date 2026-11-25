@@ -15,10 +15,11 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { userEvent } from 'vitest/browser';
 
 import { enhancedRenderingExtension } from './enhancedRendering';
+import { mermaidFullscreenHandler, type MermaidFullscreenRequest } from './mermaidFullscreenButton';
 import { clearMermaidRenderCache, MermaidWidget } from './mermaidRenderer';
 import { resetLastKnownMermaidWidth } from './mermaidWidth';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
-import { BLOCK_PREVIEW, RENDERED_MATH_BLOCK, RENDERED_MERMAID } from './testing/selectors';
+import { BLOCK_PREVIEW, FULLSCREEN_BUTTON, RENDERED_MATH_BLOCK, RENDERED_MERMAID } from './testing/selectors';
 
 // Match Joplin's createEditor.ts, which disables Chrome EditContext and uses contenteditable.
 (EditorView as unknown as { EDIT_CONTEXT: boolean }).EDIT_CONTEXT = false;
@@ -101,6 +102,55 @@ describe('enhancedRenderingExtension (browser)', () => {
 
         expect(view.dom.querySelector(RENDERED_MERMAID)).toBeNull();
         expect(view.state.selection.main.head).toBe(doc.indexOf('flowchart LR'));
+    });
+
+    it('opens a diagram full screen from its corner button without revealing the source', async () => {
+        const doc = 'Heading\n\n```mermaid\nflowchart LR\n  A[Input] --> B[Output]\n```\n\nFooter';
+        const requests: MermaidFullscreenRequest[] = [];
+        const view = track(
+            createBrowserView(doc, 0, [mermaidFullscreenHandler.of((request) => requests.push(request))])
+        );
+
+        const widget = view.dom.querySelector<HTMLElement>(RENDERED_MERMAID)!;
+        const button = widget.querySelector<HTMLButtonElement>(FULLSCREEN_BUTTON)!;
+        expect(button).not.toBeNull();
+
+        const widgetRect = widget.getBoundingClientRect();
+        const buttonRect = button.getBoundingClientRect();
+        expect(widgetRect.right - buttonRect.right).toBeLessThan(10);
+        expect(buttonRect.top - widgetRect.top).toBeLessThan(10);
+
+        view.focus();
+        await userEvent.hover(widget);
+        await expect.poll(() => getComputedStyle(button).opacity).toBe('1');
+        await userEvent.click(button, { delay: 100 });
+
+        expect(requests).toHaveLength(1);
+        expect(requests[0]?.svg).toMatch(/^<svg[^>]* class="pele /);
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
+        expect(view.state.selection.main.head).toBe(0);
+    });
+
+    it('shows the full-screen button on the live preview below revealed source', () => {
+        const doc = '```mermaid\nflowchart LR\n  A --> B\n```\n\nFooter';
+        const requests: MermaidFullscreenRequest[] = [];
+        const view = track(
+            createBrowserView(doc, doc.indexOf('A -->'), [
+                mermaidFullscreenHandler.of((request) => requests.push(request)),
+            ])
+        );
+
+        view.dom.querySelector<HTMLButtonElement>(`${BLOCK_PREVIEW} ${FULLSCREEN_BUTTON}`)?.click();
+
+        expect(requests).toHaveLength(1);
+    });
+
+    it('omits the full-screen button when no handler is registered', () => {
+        const doc = '```mermaid\nflowchart LR\n  A --> B\n```\n\nFooter';
+        const view = track(createBrowserView(doc, doc.length));
+
+        expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
+        expect(view.dom.querySelector(FULLSCREEN_BUTTON)).toBeNull();
     });
 
     it('restores KaTeX_Main font family despite Joplin span font-family: inherit rule', () => {
