@@ -161,12 +161,12 @@ let activeViewer: Viewer | null = null;
 
 function attachToCurrentRoot(): void {
     const root = document.querySelector<HTMLElement>(ROOT_SELECTOR);
-    if (!root || root === activeViewer?.root) {
+    if (root === (activeViewer?.root ?? null)) {
         return;
     }
 
     activeViewer?.dispose();
-    activeViewer = attachViewer(root);
+    activeViewer = root ? attachViewer(root) : null;
 }
 
 new MutationObserver(attachToCurrentRoot).observe(document.documentElement, { childList: true, subtree: true });

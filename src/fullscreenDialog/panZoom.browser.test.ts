@@ -83,4 +83,21 @@ describe('full-screen pan/zoom viewer (browser)', () => {
         await userEvent.click(document.querySelector<HTMLElement>('[data-action="fit"]')!);
         expect(stageTransform().a).toBeCloseTo(2);
     });
+
+    it('disposes the viewer when its root is removed from the DOM', async () => {
+        await import('./panZoom');
+        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 4);
+        await nextFrames();
+
+        const activeKeydown = new KeyboardEvent('keydown', { key: '+', cancelable: true });
+        document.dispatchEvent(activeKeydown);
+        expect(activeKeydown.defaultPrevented).toBe(true);
+
+        document.body.replaceChildren();
+        await nextFrames();
+
+        const disposedKeydown = new KeyboardEvent('keydown', { key: '+', cancelable: true });
+        document.dispatchEvent(disposedKeydown);
+        expect(disposedKeydown.defaultPrevented).toBe(false);
+    });
 });
