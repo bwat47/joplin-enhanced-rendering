@@ -61,6 +61,10 @@ export function scaleLimits(fitScale: number): ScaleLimits {
 /** Scales by `factor` (clamped to `limits`) while keeping the diagram point under `point` fixed. */
 export function zoomAround(transform: Transform, factor: number, point: Point, limits: ScaleLimits): Transform {
     const scale = Math.min(Math.max(transform.scale * factor, limits.min), limits.max);
+    if (scale === transform.scale) {
+        return transform;
+    }
+
     const ratio = scale / transform.scale;
     return {
         scale,

@@ -43,6 +43,11 @@ describe('zoomAround', () => {
         expect(zoomAround({ x: 0, y: 0, scale: 4 }, 10, { x: 0, y: 0 }, LIMITS).scale).toBe(8);
         expect(zoomAround({ x: 0, y: 0, scale: 0.2 }, 0.01, { x: 0, y: 0 }, LIMITS).scale).toBe(0.1);
     });
+
+    it('returns the original transform when the clamped scale is unchanged', () => {
+        const start = { x: 0.1, y: 0.2, scale: LIMITS.min };
+        expect(zoomAround(start, 0.5, { x: 1000, y: 1000 }, LIMITS)).toBe(start);
+    });
 });
 
 describe('applyGesture', () => {
