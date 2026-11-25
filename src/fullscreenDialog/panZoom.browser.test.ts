@@ -146,6 +146,27 @@ describe('full-screen pan/zoom viewer (browser)', () => {
         expect(stageTransform().a).toBeCloseTo(0.5, 1);
     });
 
+    it('keeps auto-fit active after clamped no-op zoom events', async () => {
+        await import('./panZoom');
+        const wideSvg =
+            '<svg xmlns="http://www.w3.org/2000/svg" class="pele" viewBox="0 0 20000 200" width="20000" height="200" style="max-width:100%;height:auto"><rect width="20000" height="200"/></svg>';
+        document.body.innerHTML = renderFullscreenDialogHtml(wideSvg, false, 8);
+        await nextFrames();
+
+        const root = document.querySelector<HTMLElement>('.er-fullscreen')!;
+        const initialScale = stageTransform().a;
+        expect(initialScale).toBeLessThan(0.1);
+
+        await userEvent.click(document.querySelector<HTMLElement>('[data-action="zoom-out"]')!);
+        expect(stageTransform().a).toBeCloseTo(initialScale, 5);
+
+        root.style.width = '232px';
+        await nextFrames();
+
+        expect(stageTransform().a).toBeLessThan(initialScale);
+        expect(stageTransform().a).toBeCloseTo(0.01, 3);
+    });
+
     it('clears pointer state when pointer capture is lost', async () => {
         await import('./panZoom');
         document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 6);

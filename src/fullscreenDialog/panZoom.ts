@@ -47,6 +47,9 @@ function attachViewer(root: HTMLElement): Viewer | null {
     };
 
     const adjust = (next: Transform): void => {
+        if (next.x === transform.x && next.y === transform.y && next.scale === transform.scale) {
+            return;
+        }
         followsFit = false;
         apply(next);
     };
@@ -95,10 +98,7 @@ function attachViewer(root: HTMLElement): Viewer | null {
 
         const before = [...pointers.values()];
         pointers.set(event.pointerId, viewportPoint(event));
-        const next = applyGesture(transform, before, [...pointers.values()], limits);
-        if (next.x !== transform.x || next.y !== transform.y || next.scale !== transform.scale) {
-            adjust(next);
-        }
+        adjust(applyGesture(transform, before, [...pointers.values()], limits));
     };
 
     const onPointerEnd = (event: PointerEvent): void => {
