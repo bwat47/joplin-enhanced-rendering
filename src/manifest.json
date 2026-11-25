@@ -13,6 +13,8 @@
     "categories": ["appearance", "editor"],
     "screenshots": [
         { "src": "images/mermaid.png", "label": "Mermaid rendering" },
+        { "src": "images/mermaid-editing.png", "label": "Mermaid editing with preview" },
+        { "src": "images/mermaid-fullscreen.png", "label": "Mermaid fullscreen dialog" },
         { "src": "images/math.png", "label": "Math rendering" }
     ],
     "promo_tile": {
