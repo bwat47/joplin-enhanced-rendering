@@ -177,6 +177,13 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '&dark .cm-enhanced-rendering-mermaid': peleThemeVariables(true),
 });
 
+/**
+ * Combined CodeMirror 6 extension for enhanced rendering.
+ *
+ * Extension order matters: `blockRenderingExtension` reads `pointerRevealFreezeExtension` and
+ * `mermaidWidthExtension` via `state.field(..., false)` during `create`/`update`, so both must
+ * precede it.
+ */
 export const enhancedRenderingExtension: Extension = [
     pointerRevealFreezeExtension,
     mermaidWidthExtension,
