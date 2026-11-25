@@ -28,6 +28,7 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 - **Reveal on selection**: Any block or inline expression intersecting the cursor or selection reverts to raw Markdown for editing; moving the cursor out renders it again.
 - **Live block preview**: While a Mermaid or display math block is revealed, a read-only block widget after its closing line keeps the rendered output visible below the source and updates as the source is edited. Clicks on the preview are inert so they don't move the cursor. Inline math has no preview.
 - **Click-to-edit & vertical navigation**: Clicking a rendered widget places the cursor inside its source, and a transaction filter allows vertical arrow-key movement to step cleanly into replaced blocks.
+- **Whole-block selection (`blockSelectionSnap.ts`)**: A transaction filter grows any non-empty selection range that touches a rendered block so it covers the whole block. Dragging, Shift+clicking or Shift+Arrowing into a diagram or display math block therefore selects all of it instead of ending at a hidden boundary in its source. Blocks already revealed for editing are left alone, and so are document changes.
 - **Drag stability (`pointerRevealFreeze.ts`)**: Freezes widget reveal/collapse transitions during mouse drags so dragging a selection across large diagrams or math blocks doesn't cause layout jumps mid-drag.
 
 ### Renderers & Caching
@@ -43,6 +44,7 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 | `src/index.ts`                             | Registers the CodeMirror 6 content script with Joplin.                                    |
 | `src/contentScript/enhancedRendering.ts`   | Wires together extensions, light/dark theme styling, and CSS assets.                      |
 | `src/contentScript/blockRenderingField.ts` | `StateField` for Mermaid and display math block widgets, live previews, and cursor entry. |
+| `src/contentScript/blockSelectionSnap.ts`  | Transaction filter snapping selections to cover whole rendered blocks.                    |
 | `src/contentScript/inlineMathPlugin.ts`    | Viewport-scoped `ViewPlugin` for inline `$...$` math widgets.                             |
 | `src/contentScript/pointerRevealFreeze.ts` | Freezes reveal/collapse state during pointer drag gestures.                               |
 | `src/contentScript/mermaidRenderer.ts`     | Mermaid extraction, Pele SVG rendering, and `MermaidWidget`.                              |

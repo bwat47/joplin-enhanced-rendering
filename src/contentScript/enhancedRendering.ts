@@ -4,6 +4,7 @@ import 'katex/dist/katex.min.css';
 
 import type { CodeMirrorControl, MarkdownEditorContentScriptModule } from 'api/types';
 import { blockRenderingExtension } from './blockRenderingField';
+import { blockSelectionSnapFilter } from './blockSelectionSnap';
 import { BLOCK_BORDER_WIDTH_PX, BLOCK_HORIZONTAL_PADDING_PX } from './blockStyle';
 import { inlineMathPlugin } from './inlineMathPlugin';
 import { mermaidWidthExtension } from './mermaidWidth';
@@ -161,6 +162,7 @@ export const enhancedRenderingExtension: Extension = [
     pointerRevealFreezeExtension,
     mermaidWidthExtension,
     blockRenderingExtension,
+    blockSelectionSnapFilter,
     inlineMathPlugin,
     enhancedRenderingTheme,
 ];
