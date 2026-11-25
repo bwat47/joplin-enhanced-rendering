@@ -37,6 +37,13 @@ export function clearMathRenderCache(): void {
     mathHeightCache.clear();
 }
 
+/**
+ * Returns a hidden element for measuring Mermaid math labels.
+ *
+ * It attaches to the global `document` on purpose, unlike widget DOM, which uses
+ * `view.dom.ownerDocument`. The probe only produces document-independent data (markup and
+ * dimensions) that is shared across views through `mermaidMathCache` and the Mermaid render cache.
+ */
 function getMathProbe(): HTMLDivElement | null {
     if (typeof document === 'undefined') {
         return null;
