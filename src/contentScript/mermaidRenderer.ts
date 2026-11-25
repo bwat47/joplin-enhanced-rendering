@@ -5,6 +5,7 @@ import { PeleError, render as renderPele } from 'pele';
 
 import { logger } from '../logger';
 import { renderMermaidMath } from './mathRenderer';
+import { createFullscreenButton } from './mermaidFullscreenButton';
 import { attachEditOnClick, attachPreviewPointerGuard, dedentLines, HEIGHT_CACHE_SIZE, LruCache } from './renderUtils';
 
 export interface MermaidBlock {
@@ -19,6 +20,8 @@ export interface MermaidBlock {
 type MermaidRenderResult = { ok: true; svg: string; width: number; height: number } | { ok: false; error: string };
 
 const MERMAID_CACHE_SENTINEL = '__joplin_er_pele_id__';
+// The full-screen dialog shows one diagram in its own document, so a fixed ID prefix is unique there.
+const FULLSCREEN_ID_PREFIX = 'er-fs-';
 const MERMAID_WIDGET_PADDING_PX = 16;
 
 // Matches the first whitespace-delimited token of a fenced code info string, e.g. `mermaid` in `mermaid title="Demo"`.
@@ -147,9 +150,6 @@ function renderMermaid(source: string, maxWidth?: number): MermaidRenderResult {
     const cacheKey = mermaidCacheKey(source, normalizedMaxWidth);
     const cached = mermaidCache.get(cacheKey);
     if (cached) {
-        if (cached.ok) {
-            lastKnownHeights.set(source, widgetHeight(cached));
-        }
         return cached;
     }
 
@@ -178,10 +178,16 @@ function renderMermaid(source: string, maxWidth?: number): MermaidRenderResult {
     }
 
     mermaidCache.set(cacheKey, result);
-    if (result.ok) {
-        lastKnownHeights.set(source, widgetHeight(result));
-    }
     return result;
+}
+
+/**
+ * Renders `source` at its natural size for the full-screen dialog, without the editor's adaptive
+ * `maxWidth`. Returns `null` for invalid diagrams.
+ */
+function renderFullscreenSvg(source: string): string | null {
+    const result = renderMermaid(source);
+    return result.ok ? result.svg.split(MERMAID_CACHE_SENTINEL).join(FULLSCREEN_ID_PREFIX) : null;
 }
 
 /**
@@ -208,7 +214,12 @@ export class MermaidWidget extends WidgetType {
     }
 
     private get result(): MermaidRenderResult {
-        this.renderedResult ??= renderMermaid(this.source, this.maxWidth);
+        if (!this.renderedResult) {
+            this.renderedResult = renderMermaid(this.source, this.maxWidth);
+            if (this.renderedResult.ok) {
+                lastKnownHeights.set(this.source, widgetHeight(this.renderedResult));
+            }
+        }
         return this.renderedResult;
     }
 
@@ -272,6 +283,10 @@ export class MermaidWidget extends WidgetType {
         if (result.ok) {
             const uniquePrefix = `er-m${++widgetInstanceCounter}-`;
             container.innerHTML = result.svg.split(MERMAID_CACHE_SENTINEL).join(uniquePrefix);
+            const button = createFullscreenButton(view, () => renderFullscreenSvg(this.source));
+            if (button) {
+                container.appendChild(button);
+            }
             return;
         }
 

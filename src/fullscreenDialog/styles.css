@@ -1,0 +1,92 @@
+/*
+ * Full-screen Mermaid diagram dialog styles.
+ *
+ * Colors come from Joplin's theme variables, each with a literal fallback in case a variable is
+ * missing.
+ */
+
+/*
+ * The dialog is opened with fit-to-content off, which gives the webview a fixed box: `100vh` is
+ * exactly the room between the dialog padding and the button bar. A flex column lets the viewport
+ * take whatever the toolbar leaves.
+ */
+.er-fullscreen {
+    box-sizing: border-box;
+    color: var(--joplin-color, #32373f);
+    display: flex;
+    flex-direction: column;
+    font-family: var(--joplin-font-family, sans-serif);
+    font-size: var(--joplin-font-size, 14px);
+    height: 100vh;
+}
+
+.er-fullscreen__toolbar {
+    align-items: center;
+    display: flex;
+    flex: none;
+    gap: 6px;
+    margin-bottom: 8px;
+}
+
+.er-fullscreen__hint {
+    flex: 1;
+    min-width: 0;
+    opacity: 0.7;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.er-fullscreen__tool {
+    background: var(--joplin-background-color, #ffffff);
+    border: 1px solid var(--joplin-divider-color, #dddddd);
+    border-radius: 4px;
+    color: inherit;
+    cursor: pointer;
+    font: inherit;
+    min-width: 32px;
+    padding: 3px 8px;
+}
+
+.er-fullscreen__tool:hover {
+    background: var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15));
+}
+
+.er-fullscreen__zoom-level {
+    font-variant-numeric: tabular-nums;
+    min-width: 4em;
+    text-align: center;
+}
+
+.er-fullscreen__viewport {
+    background: var(--joplin-background-color, #ffffff);
+    border: 1px solid var(--joplin-divider-color, #dddddd);
+    border-radius: 4px;
+    cursor: grab;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    position: relative;
+    /* Pointer events drive panning and pinch-zoom, so the browser must not scroll or zoom. */
+    touch-action: none;
+    user-select: none;
+}
+
+.er-fullscreen__viewport--panning {
+    cursor: grabbing;
+}
+
+.er-fullscreen__stage {
+    left: 0;
+    position: absolute;
+    top: 0;
+    transform-origin: 0 0;
+    width: max-content;
+}
+
+/* Pele's responsive SVG caps itself at its container width inline; show it at natural size instead. */
+.er-fullscreen__stage > svg {
+    display: block;
+    height: auto;
+    max-width: none !important;
+}

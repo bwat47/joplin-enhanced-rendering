@@ -1,11 +1,12 @@
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import { vi } from 'vitest';
+import { vi, type Mock } from 'vitest';
 
-import type { CodeMirrorControl } from 'api/types';
+import type { CodeMirrorControl, ContentScriptContext } from 'api/types';
+import type { OpenMermaidFullscreenMessage } from '../fullscreenMessage';
 import createContentScript, { enhancedRenderingExtension } from './enhancedRendering';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
-import { BLOCK_PREVIEW, RENDERED_MATH_BLOCK, RENDERED_MERMAID } from './testing/selectors';
+import { BLOCK_PREVIEW, FULLSCREEN_BUTTON, RENDERED_MATH_BLOCK, RENDERED_MERMAID } from './testing/selectors';
 
 function createView(doc: string, cursorPos = 0, includeMath = true): EditorView {
     const parent = document.createElement('div');
@@ -21,6 +22,14 @@ function createView(doc: string, cursorPos = 0, includeMath = true): EditorView 
     });
 }
 
+function createContext(): ContentScriptContext & { postMessage: Mock<(message: unknown) => Promise<unknown>> } {
+    return {
+        pluginId: 'test-plugin',
+        contentScriptId: 'enhancedRendering',
+        postMessage: vi.fn((_message: unknown) => Promise.resolve(undefined)),
+    };
+}
+
 describe('enhancedRendering content script', () => {
     it('registers the CM6 extension when cm6 is available', () => {
         const addExtension = vi.fn();
@@ -29,11 +38,46 @@ describe('enhancedRendering content script', () => {
             addExtension,
         } as unknown as CodeMirrorControl;
 
-        const module = createContentScript();
+        const module = createContentScript(createContext());
         module.plugin(control);
 
         expect(addExtension).toHaveBeenCalledTimes(1);
-        expect(addExtension).toHaveBeenCalledWith(enhancedRenderingExtension);
+        const registered = addExtension.mock.calls[0]?.[0] as unknown[];
+        expect(registered).toContain(enhancedRenderingExtension);
+    });
+
+    it('posts the unconstrained diagram SVG when the full-screen button is clicked', () => {
+        const DOC = '```mermaid\nflowchart LR\n  A --> B\n```\n\nAfter';
+        const context = createContext();
+        const addExtension = vi.fn();
+        createContentScript(context).plugin({ cm6: {}, addExtension } as unknown as CodeMirrorControl);
+
+        const parent = document.createElement('div');
+        document.body.append(parent);
+        const view = new EditorView({
+            parent,
+            state: EditorState.create({
+                doc: DOC,
+                selection: { anchor: DOC.length },
+                extensions: [createJoplinMarkdownExtension(), addExtension.mock.calls[0]?.[0]],
+            }),
+        });
+
+        const button = view.dom.querySelector<HTMLButtonElement>(`${RENDERED_MERMAID} ${FULLSCREEN_BUTTON}`);
+        expect(button).not.toBeNull();
+        button?.click();
+
+        expect(context.postMessage).toHaveBeenCalledTimes(1);
+        const message = context.postMessage.mock.calls[0]?.[0] as OpenMermaidFullscreenMessage;
+        expect(message.type).toBe('openMermaidFullscreen');
+        expect(message.svg).toMatch(/^<svg[^>]* class="pele /);
+        expect(message.svg).not.toContain('__joplin_er_pele_id__');
+        expect(message.dark).toBe(false);
+        // Clicking the button must not reveal the source for editing.
+        expect(view.state.selection.main.head).toBe(DOC.length);
+
+        view.destroy();
+        parent.remove();
     });
 
     it('skips registration when cm6 is not available', () => {
@@ -43,14 +87,14 @@ describe('enhancedRendering content script', () => {
             addExtension,
         } as unknown as CodeMirrorControl;
 
-        const module = createContentScript();
+        const module = createContentScript(createContext());
         module.plugin(control);
 
         expect(addExtension).not.toHaveBeenCalled();
     });
 
     it('exports the bundled stylesheet asset', () => {
-        const module = createContentScript();
+        const module = createContentScript(createContext());
 
         expect(module.assets?.()).toEqual([{ name: './enhancedRendering.css' }]);
     });

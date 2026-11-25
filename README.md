@@ -27,6 +27,8 @@ Install from Joplin's plugin manager, or install the `.jpl` file manually:
 
 - Math rendering requires "Enable math expressions (wysiwyg: yes)" to be enabled under Tools | Options | Markdown (otherwise the syntax tree nodes for math aren't available in the editor).
 
+- Hover a rendered Mermaid diagram and click the button in its top-right corner to open it in a full-screen dialog. Drag to pan, scroll or pinch to zoom, and double-click to fit it to the window.
+
 - Mermaid diagrams can appear differently than in the Markdown viewer due to the different library being used to render them.
 
 ## Development

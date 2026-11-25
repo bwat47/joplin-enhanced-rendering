@@ -2,11 +2,15 @@ import type { Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import 'katex/dist/katex.min.css';
 
-import type { CodeMirrorControl, MarkdownEditorContentScriptModule } from 'api/types';
+import type { CodeMirrorControl, ContentScriptContext, MarkdownEditorContentScriptModule } from 'api/types';
+import type { OpenMermaidFullscreenMessage } from '../fullscreenMessage';
+import { logger } from '../logger';
+import { peleThemeVariables } from '../peleTheme';
 import { blockRenderingExtension } from './blockRenderingField';
 import { blockSelectionSnapFilter } from './blockSelectionSnap';
 import { BLOCK_BORDER_WIDTH_PX, BLOCK_HORIZONTAL_PADDING_PX } from './blockStyle';
 import { inlineMathPlugin } from './inlineMathPlugin';
+import { mermaidFullscreenHandler, type MermaidFullscreenRequest } from './mermaidFullscreenButton';
 import { mermaidWidthExtension } from './mermaidWidth';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 
@@ -23,8 +27,8 @@ const NATIVE_SELECTION_RESET = {
 };
 
 /**
- * Widget layout, error styling, KaTeX specificity overrides, and Pele CSS custom properties
- * mapped to Joplin's theme variables with CodeMirror light/dark fallbacks.
+ * Widget layout, full-screen button, error styling, KaTeX specificity overrides, and Pele CSS
+ * custom properties mapped to Joplin's theme variables with CodeMirror light/dark fallbacks.
  */
 const enhancedRenderingTheme = EditorView.baseTheme({
     /*
@@ -60,6 +64,41 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '.cm-enhanced-rendering-block ::selection': NATIVE_SELECTION_RESET,
     '&.cm-focused .cm-enhanced-rendering-block::selection': NATIVE_SELECTION_RESET,
     '&.cm-focused .cm-enhanced-rendering-block ::selection': NATIVE_SELECTION_RESET,
+    // Anchors the full-screen button. Pele scales diagrams to fit, so Mermaid blocks never scroll
+    // horizontally and the button can't scroll out of view.
+    '.cm-enhanced-rendering-mermaid': {
+        position: 'relative',
+    },
+    '.cm-enhanced-rendering-fullscreen-button': {
+        position: 'absolute',
+        top: '4px',
+        right: '4px',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: '28px',
+        height: '28px',
+        padding: '0',
+        border: '1px solid var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
+        borderRadius: '4px',
+        backgroundColor: 'var(--joplin-background-color, transparent)',
+        color: 'var(--joplin-color, inherit)',
+        cursor: 'pointer',
+        transition: 'opacity 120ms ease',
+    },
+    '.cm-enhanced-rendering-fullscreen-button:hover': {
+        backgroundColor: 'var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15))',
+    },
+    // Reveal on hover where the device can hover; touch devices keep the button visible.
+    '@media (hover: hover)': {
+        '.cm-enhanced-rendering-fullscreen-button': {
+            opacity: '0',
+        },
+        '.cm-enhanced-rendering-mermaid:hover > .cm-enhanced-rendering-fullscreen-button, .cm-enhanced-rendering-fullscreen-button:focus-visible':
+            {
+                opacity: '1',
+            },
+    },
     '.cm-enhanced-rendering-mermaid > svg.pele': {
         display: 'block',
         margin: '0 auto',
@@ -133,30 +172,8 @@ const enhancedRenderingTheme = EditorView.baseTheme({
     '.cm-enhanced-rendering-inline .cm-enhanced-rendering-error': {
         padding: '0 0.3em',
     },
-    '&light .cm-enhanced-rendering-mermaid': {
-        '--pele-bg': 'var(--joplin-background-color, #ffffff)',
-        '--pele-fg': 'var(--joplin-color, #1f1f1f)',
-        '--pele-muted': 'var(--joplin-color-faded, #6e6e6e)',
-        '--pele-line': 'var(--joplin-color, #1f1f1f)',
-        '--pele-surface': 'var(--joplin-background-color3, #f3f3f3)',
-        '--pele-surface-alt': 'var(--joplin-background-color-hover3, #e6e6e6)',
-        '--pele-border': 'var(--joplin-divider-color, #8a8a8a)',
-        '--pele-accent': 'var(--joplin-url-color, #205ea6)',
-        '--pele-font': 'inherit',
-        '--pele-radius': '4px',
-    },
-    '&dark .cm-enhanced-rendering-mermaid': {
-        '--pele-bg': 'var(--joplin-background-color, #1d2024)',
-        '--pele-fg': 'var(--joplin-color, #dddddd)',
-        '--pele-muted': 'var(--joplin-color-faded, #9ca3af)',
-        '--pele-line': 'var(--joplin-color, #dddddd)',
-        '--pele-surface': 'var(--joplin-background-color3, #2b2f36)',
-        '--pele-surface-alt': 'var(--joplin-background-color-hover3, #363b44)',
-        '--pele-border': 'var(--joplin-divider-color, #555b66)',
-        '--pele-accent': 'var(--joplin-url-color, #6ea8fe)',
-        '--pele-font': 'inherit',
-        '--pele-radius': '4px',
-    },
+    '&light .cm-enhanced-rendering-mermaid': peleThemeVariables(false),
+    '&dark .cm-enhanced-rendering-mermaid': peleThemeVariables(true),
 });
 
 export const enhancedRenderingExtension: Extension = [
@@ -168,14 +185,22 @@ export const enhancedRenderingExtension: Extension = [
     enhancedRenderingTheme,
 ];
 
-export default (): MarkdownEditorContentScriptModule => {
+export default (context: ContentScriptContext): MarkdownEditorContentScriptModule => {
+    const openFullscreen = ({ svg, dark }: MermaidFullscreenRequest): void => {
+        const message: OpenMermaidFullscreenMessage = { type: 'openMermaidFullscreen', svg, dark };
+        // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Joplin's content script channel, not window.postMessage.
+        context.postMessage(message).catch((error: unknown) => {
+            logger.error('Could not open the full-screen diagram dialog.', error);
+        });
+    };
+
     return {
         plugin: (codeMirrorWrapper: CodeMirrorControl) => {
             if (!codeMirrorWrapper.cm6) {
                 return;
             }
 
-            codeMirrorWrapper.addExtension(enhancedRenderingExtension);
+            codeMirrorWrapper.addExtension([enhancedRenderingExtension, mermaidFullscreenHandler.of(openFullscreen)]);
         },
         assets: () => [{ name: './enhancedRendering.css' }],
     };

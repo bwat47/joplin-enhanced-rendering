@@ -1,0 +1,63 @@
+import { Facet } from '@codemirror/state';
+import { EditorView } from '@codemirror/view';
+
+export interface MermaidFullscreenRequest {
+    svg: string;
+    dark: boolean;
+}
+
+export type MermaidFullscreenHandler = (request: MermaidFullscreenRequest) => void;
+
+/**
+ * Receives full-screen requests from Mermaid widgets. Diagrams show no full-screen button when
+ * no handler is provided (e.g. in tests or hosts without the plugin's dialog).
+ */
+export const mermaidFullscreenHandler = Facet.define<MermaidFullscreenHandler, MermaidFullscreenHandler | null>({
+    combine: (handlers) => handlers[0] ?? null,
+});
+
+const BUTTON_LABEL = 'Open diagram full screen';
+
+// Four outward corner brackets ("expand"), drawn with the button's text color.
+const EXPAND_ICON =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16" width="16" height="16" fill="none" ' +
+    'stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">' +
+    '<path d="M2 6V2h4M10 2h4v4M14 10v4h-4M6 14H2v-4"/></svg>';
+
+/**
+ * Creates the full-screen button for a rendered Mermaid diagram, or returns `null` when the editor
+ * has no {@link mermaidFullscreenHandler}.
+ *
+ * The button swallows its own pointer events so pressing it never triggers the widget's
+ * click-to-edit behavior. `renderSvg` is called on click, so the unconstrained full-screen render
+ * only happens when the user asks for it.
+ */
+export function createFullscreenButton(view: EditorView, renderSvg: () => string | null): HTMLButtonElement | null {
+    const handler = view.state.facet(mermaidFullscreenHandler);
+    if (!handler) {
+        return null;
+    }
+
+    const button = view.dom.ownerDocument.createElement('button');
+    button.type = 'button';
+    button.className = 'cm-enhanced-rendering-fullscreen-button';
+    button.title = BUTTON_LABEL;
+    button.setAttribute('aria-label', BUTTON_LABEL);
+    button.innerHTML = EXPAND_ICON;
+
+    button.addEventListener('mousedown', (event) => {
+        // Keep focus in the editor and stop the widget's click-to-edit handler from arming.
+        event.preventDefault();
+        event.stopPropagation();
+    });
+    button.addEventListener('click', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const svg = renderSvg();
+        if (svg !== null) {
+            handler({ svg, dark: view.state.facet(EditorView.darkTheme) });
+        }
+    });
+
+    return button;
+}

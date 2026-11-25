@@ -6,3 +6,6 @@ export const RENDERED_MATH_BLOCK = '.cm-enhanced-rendering-math-block:not(.cm-en
 
 /** Live preview widget shown below a revealed block's source. */
 export const BLOCK_PREVIEW = '.cm-enhanced-rendering-preview';
+
+/** Full-screen button in the top-right corner of a rendered Mermaid diagram or its live preview. */
+export const FULLSCREEN_BUTTON = '.cm-enhanced-rendering-fullscreen-button';
