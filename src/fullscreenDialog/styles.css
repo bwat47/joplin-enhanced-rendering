@@ -48,8 +48,10 @@
     padding: 3px 8px;
 }
 
-.er-fullscreen__tool:hover {
-    background: var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15));
+@media (hover: hover) {
+    .er-fullscreen__tool:hover {
+        background: var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15));
+    }
 }
 
 .er-fullscreen__zoom-level {
