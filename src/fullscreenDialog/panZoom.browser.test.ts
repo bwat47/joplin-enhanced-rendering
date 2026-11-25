@@ -118,6 +118,34 @@ describe('full-screen pan/zoom viewer (browser)', () => {
         expect(stageTransform().a).toBeCloseTo(0.5, 1);
     });
 
+    it('keeps auto-fit active after zero-delta pointermove events', async () => {
+        await import('./panZoom');
+        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 7);
+        await nextFrames();
+
+        const root = document.querySelector<HTMLElement>('.er-fullscreen')!;
+        const viewport = document.querySelector<HTMLElement>('.er-fullscreen__viewport')!;
+        const viewportRect = viewport.getBoundingClientRect();
+        const initialScale = stageTransform().a;
+        const point = {
+            pointerId: 1,
+            pointerType: 'mouse',
+            button: 0,
+            clientX: viewportRect.left + 100,
+            clientY: viewportRect.top + 100,
+        };
+
+        viewport.dispatchEvent(new PointerEvent('pointerdown', point));
+        viewport.dispatchEvent(new PointerEvent('pointermove', point));
+        viewport.dispatchEvent(new PointerEvent('pointerup', point));
+
+        root.style.width = '232px';
+        await nextFrames();
+
+        expect(stageTransform().a).toBeLessThan(initialScale);
+        expect(stageTransform().a).toBeCloseTo(0.5, 1);
+    });
+
     it('clears pointer state when pointer capture is lost', async () => {
         await import('./panZoom');
         document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 6);

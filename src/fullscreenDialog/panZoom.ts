@@ -95,7 +95,10 @@ function attachViewer(root: HTMLElement): Viewer | null {
 
         const before = [...pointers.values()];
         pointers.set(event.pointerId, viewportPoint(event));
-        adjust(applyGesture(transform, before, [...pointers.values()], limits));
+        const next = applyGesture(transform, before, [...pointers.values()], limits);
+        if (next.x !== transform.x || next.y !== transform.y || next.scale !== transform.scale) {
+            adjust(next);
+        }
     };
 
     const onPointerEnd = (event: PointerEvent): void => {
