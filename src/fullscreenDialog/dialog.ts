@@ -13,6 +13,7 @@ const DIALOG_ID = 'enhancedRenderingMermaidFullscreen';
 
 let dialogHandle: ViewHandle | null = null;
 let openCount = 0;
+let isDialogOpen = false;
 
 /** Creates the (initially hidden) dialog view. Called once at plugin start. */
 export async function registerFullscreenDialog(): Promise<void> {
@@ -37,10 +38,17 @@ export async function openFullscreenDialog({ svg, dark }: OpenMermaidFullscreenM
         return;
     }
 
+    if (isDialogOpen) {
+        return;
+    }
+
+    isDialogOpen = true;
     try {
         await joplin.views.dialogs.setHtml(dialogHandle, renderFullscreenDialogHtml(svg, dark, ++openCount));
         await joplin.views.dialogs.open(dialogHandle);
     } catch (error) {
         logger.error('Could not open the full-screen diagram dialog.', error);
+    } finally {
+        isDialogOpen = false;
     }
 }
