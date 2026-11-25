@@ -129,6 +129,24 @@ const blockRenderingField = StateField.define<BlockRenderingState>({
     provide: (field) => EditorView.decorations.from(field, (value) => value.decorations),
 });
 
+/** Document range a rendered block widget replaces. */
+export interface RenderedBlockSpan {
+    readonly from: number;
+    readonly to: number;
+}
+
+/** Returns the replaced ranges of every block currently drawn as a widget, in document order. */
+export function getRenderedBlockSpans(state: EditorState): readonly RenderedBlockSpan[] {
+    const field = state.field(blockRenderingField, false);
+    if (!field) {
+        return [];
+    }
+
+    return field.blocks
+        .filter((block) => block.rendered)
+        .map((block) => ({ from: block.replaceFrom, to: block.replaceTo }));
+}
+
 interface BlockLineSpan {
     from: number;
     to: number;

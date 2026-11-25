@@ -1,4 +1,13 @@
-import { cursorDocEnd, cursorDocStart, cursorLineDown, cursorLineUp } from '@codemirror/commands';
+import {
+    cursorDocEnd,
+    cursorDocStart,
+    cursorLineDown,
+    cursorLineUp,
+    selectCharLeft,
+    selectCharRight,
+    selectLineDown,
+    selectLineUp,
+} from '@codemirror/commands';
 import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorState, type Extension } from '@codemirror/state';
 import { drawSelection, EditorView, rectangularSelection } from '@codemirror/view';
@@ -235,6 +244,65 @@ describe('enhancedRenderingExtension (browser)', () => {
             expect(clickPos).not.toBeNull();
             expect(view.state.doc.lineAt(clickPos!).number).toBe(expectedLineNumber);
         }
+    });
+
+    it('snaps a mouse drag reaching into the near half of a rendered Mermaid block to cover all of it', () => {
+        const mermaid = '```mermaid\nflowchart LR\n  A --> B\n```';
+        const doc = `Heading\n\n${mermaid}\n\nFooter`;
+        const from = doc.indexOf(mermaid);
+        const to = from + mermaid.length;
+        const footer = doc.indexOf('Footer');
+
+        for (const [anchor, fraction, expectedHead] of [
+            [0, 0.25, to],
+            [footer, 0.75, from],
+        ] as const) {
+            const view = track(createBrowserView(doc, anchor));
+            const rect = view.dom.querySelector(RENDERED_MERMAID)!.getBoundingClientRect();
+            view.contentDOM.dispatchEvent(
+                new MouseEvent('mousedown', { bubbles: true, cancelable: true, button: 0, buttons: 1 })
+            );
+
+            // The near half of a block widget maps to the block boundary the drag came from.
+            const head = view.posAtCoords({ x: rect.left + rect.width / 2, y: rect.top + rect.height * fraction });
+            expect(head).toBe(expectedHead === to ? from : to);
+            view.dispatch({ selection: { anchor, head: head! }, userEvent: 'select.pointer' });
+
+            expect(view.state.selection.main.anchor).toBe(anchor);
+            expect(view.state.selection.main.head).toBe(expectedHead);
+            expect(view.dom.querySelector(RENDERED_MERMAID)).not.toBeNull();
+        }
+    });
+
+    it('snaps keyboard selection into a rendered block to cover all of it', () => {
+        const mermaid = '```mermaid\nflowchart LR\n  A --> B\n```';
+        const doc = `Heading\n\n${mermaid}\n\nFooter`;
+        const from = doc.indexOf(mermaid);
+        const to = from + mermaid.length;
+
+        // Shift+ArrowRight onto the opening boundary would otherwise stop at `from`.
+        const right = track(createBrowserView(doc, from - 1));
+        selectCharRight(right);
+        expect([right.state.selection.main.anchor, right.state.selection.main.head]).toEqual([from - 1, to]);
+
+        // Shift+ArrowLeft onto the closing boundary would otherwise stop at `to`.
+        const left = track(createBrowserView(doc, to + 1));
+        selectCharLeft(left);
+        expect([left.state.selection.main.anchor, left.state.selection.main.head]).toEqual([to + 1, from]);
+
+        // Shift+ArrowDown/Up crossing the block still covers all of it.
+        const down = track(createBrowserView(doc, 0));
+        selectLineDown(down);
+        selectLineDown(down);
+        expect(down.state.selection.main.from).toBe(0);
+        expect(down.state.selection.main.to).toBeGreaterThanOrEqual(to);
+
+        const footer = doc.indexOf('Footer');
+        const up = track(createBrowserView(doc, footer));
+        selectLineUp(up);
+        selectLineUp(up);
+        expect(up.state.selection.main.to).toBe(footer);
+        expect(up.state.selection.main.from).toBeLessThanOrEqual(from);
     });
 
     it('freezes widget reveal during a left-button mouse drag and reveals on mouseup', async () => {
