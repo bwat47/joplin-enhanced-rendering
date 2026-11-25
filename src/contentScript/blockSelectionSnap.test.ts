@@ -101,4 +101,18 @@ describe('blockSelectionSnapFilter', () => {
         }).state;
         expect([next.selection.main.anchor, next.selection.main.head]).toEqual([3, MERMAID_FROM + 6]);
     });
+
+    it('leaves search and programmatic selections inside a rendered block alone', () => {
+        const state = createState(0);
+        const search = state.update({
+            selection: { anchor: MERMAID_FROM, head: MERMAID_FROM + 3 },
+            userEvent: 'select.search',
+        }).state.selection.main;
+        expect([search.anchor, search.head]).toEqual([MERMAID_FROM, MERMAID_FROM + 3]);
+
+        const programmatic = state.update({
+            selection: { anchor: MERMAID_FROM, head: MERMAID_FROM + 3 },
+        }).state.selection.main;
+        expect([programmatic.anchor, programmatic.head]).toEqual([MERMAID_FROM, MERMAID_FROM + 3]);
+    });
 });

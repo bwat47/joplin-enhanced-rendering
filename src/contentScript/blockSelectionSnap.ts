@@ -49,17 +49,18 @@ export function snapSelectionToBlocks(
 }
 
 /**
- * Snaps selection-only transactions to cover every block rendered in the start state, so
- * extending a selection (Shift+Arrow, mouse drag, Shift+click) into a diagram or display math
- * block selects all of it. Blocks already revealed for editing are left alone, so their source
- * can be selected freely.
+ * Snaps user selection gestures to cover every block rendered in the start state, so extending a
+ * selection (Shift+Arrow, mouse drag, Shift+click) into a diagram or display math block selects
+ * all of it. Blocks already revealed for editing are left alone, so their source can be selected
+ * freely.
  *
- * Document changes are left alone: this exists for selection gestures, and an edit decides its
- * own selection. The original transaction stays first so its annotations and effects survive;
- * the second, sequential spec only replaces its selection.
+ * Document changes, search matches (`select.search`), and programmatic selections are left alone:
+ * this exists for interactive selection gestures, and edits or search decide their own selection.
+ * The original transaction stays first so its annotations and effects survive; the second,
+ * sequential spec only replaces its selection.
  */
 export const blockSelectionSnapFilter: Extension = EditorState.transactionFilter.of((tr) => {
-    if (tr.docChanged || !tr.selection) {
+    if (tr.docChanged || !tr.selection || !tr.isUserEvent('select') || tr.isUserEvent('select.search')) {
         return tr;
     }
 
