@@ -5,6 +5,7 @@
 
 import joplin from 'api';
 import type { ViewHandle } from 'api/types';
+import { DEFAULT_EXPORT_OPTIONS, type ExportOptions } from '../exportOptions';
 import type { OpenMermaidFullscreenMessage } from '../fullscreenMessage';
 import { logger } from '../logger';
 import { readExportSettings } from '../settings';
@@ -46,6 +47,7 @@ export async function registerFullscreenDialog(options: FullscreenDialogOptions)
         await joplin.views.dialogs.addScript(handle, './fullscreenDialog/panZoom.js');
         if (options.exportEnabled) {
             await joplin.views.dialogs.addScript(handle, './fullscreenDialog/exportMenu.js');
+            // Joplin only exposes `onMessage` on `views.panels`, but dialogs share the same ViewHandle plumbing.
             await joplin.views.panels.onMessage(handle, onDialogMessage);
         }
         // "cancel" is one of Joplin's dismiss button IDs, so Escape closes the dialog.
@@ -60,17 +62,30 @@ export async function registerFullscreenDialog(options: FullscreenDialogOptions)
 }
 
 async function selectedNoteTitle(): Promise<string | undefined> {
-    // Typed as unknown: the generated API declares `NoteEntity` in a module the plugin doesn't ship.
-    const note: unknown = await joplin.workspace.selectedNote();
-    if (typeof note === 'object' && note !== null && 'title' in note && typeof note.title === 'string') {
-        return note.title;
+    try {
+        // Typed as unknown: the generated API declares `NoteEntity` in a module the plugin doesn't ship.
+        const note: unknown = await joplin.workspace.selectedNote();
+        if (typeof note === 'object' && note !== null && 'title' in note && typeof note.title === 'string') {
+            return note.title;
+        }
+    } catch (error) {
+        logger.warn('Could not read the selected note title for diagram export.', error);
     }
     return undefined;
 }
 
+async function loadExportOptions(): Promise<ExportOptions> {
+    try {
+        return await readExportSettings();
+    } catch (error) {
+        logger.warn('Could not read the diagram export settings.', error);
+        return DEFAULT_EXPORT_OPTIONS;
+    }
+}
+
 async function loadExportConfig(): Promise<DialogExportConfig> {
-    const options = await readExportSettings();
-    return { options, fileName: diagramFileName(await selectedNoteTitle()) };
+    const [options, noteTitle] = await Promise.all([loadExportOptions(), selectedNoteTitle()]);
+    return { options, fileName: diagramFileName(noteTitle) };
 }
 
 /** Shows a diagram in the full-screen dialog and resolves once the user closes it. */

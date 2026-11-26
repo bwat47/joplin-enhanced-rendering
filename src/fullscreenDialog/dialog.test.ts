@@ -92,6 +92,22 @@ describe('fullscreenDialog', () => {
         expect(html).toContain('data-export-file-name="Plan Q3"');
     });
 
+    it('still opens the dialog with fallback export config if settings or note lookup fails', async () => {
+        settings.values.mockRejectedValueOnce(new Error('settings unavailable'));
+        workspace.selectedNote.mockRejectedValueOnce(new Error('no note'));
+        vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+        const { openFullscreenDialog, registerFullscreenDialog } = await import('./dialog');
+        await registerFullscreenDialog({ exportEnabled: true });
+        await openFullscreenDialog({ type: 'openMermaidFullscreen', svg: '<svg></svg>', dark: false });
+
+        expect(dialogs.open).toHaveBeenCalledTimes(1);
+        const html = String(dialogs.setHtml.mock.calls[0]?.[1]);
+        expect(html).toContain('data-export-appearance="light"');
+        expect(html).toContain('data-export-png-scale="2"');
+        expect(html).toContain('data-export-file-name="mermaid-diagram"');
+    });
+
     it('copies HTML from the Export menu to the clipboard', async () => {
         const { registerFullscreenDialog } = await import('./dialog');
         await registerFullscreenDialog({ exportEnabled: true });
