@@ -131,6 +131,39 @@ describe('enhancedRenderingExtension (browser)', () => {
         expect(view.state.selection.main.head).toBe(0);
     });
 
+    it('opens a diagram full screen on tap and cancels the tap so no keyboard or click follows', () => {
+        const doc = '```mermaid\nflowchart LR\n  A --> B\n```\n\nFooter';
+        const requests: MermaidFullscreenRequest[] = [];
+        const view = track(
+            createBrowserView(doc, doc.length, [mermaidFullscreenHandler.of((request) => requests.push(request))])
+        );
+        const button = view.dom.querySelector<HTMLButtonElement>(`${RENDERED_MERMAID} ${FULLSCREEN_BUTTON}`)!;
+        const rect = button.getBoundingClientRect();
+
+        const touchAt = (dx: number): Touch =>
+            new Touch({ identifier: 1, target: button, clientX: rect.left + 4 + dx, clientY: rect.top + 4 });
+        const tap = (dx: number): TouchEvent => {
+            const start = touchAt(0);
+            button.dispatchEvent(
+                new TouchEvent('touchstart', { bubbles: true, touches: [start], changedTouches: [start] })
+            );
+            const end = new TouchEvent('touchend', {
+                bubbles: true,
+                cancelable: true,
+                changedTouches: [touchAt(dx)],
+            });
+            button.dispatchEvent(end);
+            return end;
+        };
+
+        expect(tap(0).defaultPrevented).toBe(true);
+        expect(requests).toHaveLength(1);
+
+        // A touch that moves (a scroll starting on the button) is left to the browser.
+        expect(tap(30).defaultPrevented).toBe(false);
+        expect(requests).toHaveLength(1);
+    });
+
     it('shows the full-screen button on the live preview below revealed source', () => {
         const doc = '```mermaid\nflowchart LR\n  A --> B\n```\n\nFooter';
         const requests: MermaidFullscreenRequest[] = [];

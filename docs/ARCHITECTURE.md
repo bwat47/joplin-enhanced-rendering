@@ -33,7 +33,7 @@ CodeMirror 6 requires decorations that replace multi-line blocks to live in a `S
 
 ### Full-Screen Diagrams
 
-Rendered Mermaid diagrams and their live previews show a button in the top-right corner (revealed on hover where the device can hover). It swallows its own pointer events, so pressing it never triggers click-to-edit.
+Rendered Mermaid diagrams and their live previews show a button in the top-right corner (revealed on hover where the device can hover). It swallows its own pointer events, so pressing it never triggers click-to-edit. On touch devices it handles the tap itself and cancels `touchend`, since the tap gesture would otherwise open the virtual keyboard (shifting the editor's scroll position) before the dialog opens.
 
 1. **Content script (`mermaidFullscreenButton.ts`)**: On click, the widget renders its source again without the editor's `maxWidth`, so the diagram uses its natural layout, and passes the SVG and the editor's dark-theme flag to the handler in the `mermaidFullscreenHandler` facet. `enhancedRendering.ts` supplies a handler that forwards them to the plugin with `context.postMessage` (`fullscreenMessage.ts` defines the message). Without a handler, as in tests, no button is shown.
 2. **Main process (`fullscreenDialog/dialog.ts`)**: `index.ts` receives the message through `joplin.contentScripts.onMessage` and opens a Joplin dialog with fit-to-content off, so it takes most of the window. `dialogHtml.ts` wraps the SVG in a toolbar and viewport, setting Pele's color variables inline from the same `peleTheme.ts` mapping the editor theme uses.
