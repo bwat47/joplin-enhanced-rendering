@@ -37,6 +37,7 @@ let widgetInstanceCounter = 0;
 /**
  * Clears the cached Pele render outputs (useful in tests).
  */
+// fallow-ignore-next-line test-only-export -- tests reset the module-level Pele render and height caches between cases
 export function clearMermaidRenderCache(): void {
     mermaidCache.clear();
     lastKnownHeights.clear();

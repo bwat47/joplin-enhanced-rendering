@@ -7,7 +7,6 @@ import {
     extractBlockMath,
     extractInlineMath,
     MathWidget,
-    renderMath,
     renderMermaidMath,
     type MathExpression,
 } from './mathRenderer';
@@ -64,37 +63,46 @@ describe('extractInlineMath & extractBlockMath', () => {
     });
 });
 
-describe('renderMath', () => {
+function renderWidget(tex: string, displayMode: boolean): HTMLElement {
+    const view = new EditorView({ parent: document.createElement('div') });
+    const element = new MathWidget(tex, displayMode, 3).toDOM(view);
+    view.destroy();
+    return element;
+}
+
+describe('MathWidget', () => {
     beforeEach(() => {
         clearMathRenderCache();
     });
 
-    it('renders inline and display math via KaTeX and caches by mode', () => {
-        const inlineResult = renderMath('x^2', false);
-        const blockResult = renderMath('x^2', true);
+    it('renders inline and display math via KaTeX, keeping the modes apart', () => {
+        const inline = renderWidget('x^2', false);
+        const block = renderWidget('x^2', true);
 
-        expect(inlineResult.ok).toBe(true);
-        expect(blockResult.ok).toBe(true);
-        if (!inlineResult.ok || !blockResult.ok) throw new Error('Expected KaTeX render to succeed');
-        expect(inlineResult.html).toContain('class="katex"');
-        expect(inlineResult.html).not.toContain('katex-display');
-        expect(blockResult.html).toContain('katex-display');
-        expect(renderMath('x^2', false)).toBe(inlineResult);
+        expect(inline.querySelector('.katex')).not.toBeNull();
+        expect(inline.querySelector('.katex-display')).toBeNull();
+        expect(block.querySelector('.katex-display')).not.toBeNull();
+        expect(renderWidget('x^2', false).querySelector('.katex-display')).toBeNull();
     });
 
-    it('returns an error result for invalid LaTeX', () => {
-        const result = renderMath('\\frac{1}', false);
-        expect(result.ok).toBe(false);
-        if (result.ok) throw new Error('Expected KaTeX render to fail');
-        expect(result.error.length).toBeGreaterThan(0);
+    it('shows an error for invalid LaTeX', () => {
+        const inline = renderWidget('\\frac{1}', false);
+        expect(inline.dataset.renderError).toBe('true');
+        expect(inline.querySelector('.katex')).toBeNull();
+        const inlineError = inline.querySelector<HTMLElement>('.cm-enhanced-rendering-error')!;
+        expect(inlineError.textContent).toBe('\\frac{1}');
+        expect(inlineError.title.length).toBeGreaterThan(0);
+
+        const block = renderWidget('\\frac{1}', true);
+        expect(block.querySelector('.cm-enhanced-rendering-error')!.textContent).toMatch(/^KaTeX error: /);
     });
 
     it('disallows untrusted KaTeX commands such as \\href', () => {
-        const result = renderMath('\\href{javascript:alert(1)}{click}', false);
-        expect(result.ok).toBe(true);
-        if (!result.ok) throw new Error('Expected KaTeX render to succeed');
-        expect(result.html).not.toContain('<a ');
-        expect(result.html).not.toContain('href=');
+        const element = renderWidget('\\href{javascript:alert(1)}{click}', false);
+        expect(element.dataset.renderError).toBeUndefined();
+        expect(element.querySelector('.katex')).not.toBeNull();
+        expect(element.querySelector('a')).toBeNull();
+        expect(element.innerHTML).not.toContain('href=');
     });
 
     it('implements widget equality', () => {
@@ -111,12 +119,7 @@ describe('renderMath', () => {
 });
 
 describe('MathWidget tagged display math', () => {
-    const renderBlock = (tex: string): HTMLElement => {
-        const view = new EditorView({ parent: document.createElement('div') });
-        const element = new MathWidget(tex, true, 3).toDOM(view);
-        view.destroy();
-        return element;
-    };
+    const renderBlock = (tex: string): HTMLElement => renderWidget(tex, true);
 
     const childClasses = (element: Element): string[] => Array.from(element.children, (child) => child.className);
 

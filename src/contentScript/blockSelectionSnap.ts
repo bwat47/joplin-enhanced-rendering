@@ -37,7 +37,7 @@ function snapRange(range: SelectionRange, blocks: readonly RenderedBlockSpan[]):
  *
  * @returns The grown selection, or null when nothing needed moving.
  */
-export function snapSelectionToBlocks(
+function snapSelectionToBlocks(
     selection: EditorSelection,
     blocks: readonly RenderedBlockSpan[]
 ): EditorSelection | null {

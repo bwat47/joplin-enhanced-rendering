@@ -17,6 +17,7 @@ const GROW_HYSTERESIS_PX = 24;
  * Sets the active Mermaid width bucket. Dispatched by the width plugin after measuring; exported so
  * state-only tests can drive width changes without a mounted view.
  */
+// fallow-ignore-next-line test-only-export -- state-only tests drive width changes without a mounted view
 export const setMermaidMaxWidthEffect = StateEffect.define<number | null>();
 
 let lastKnownWidthBucket: number | null = null;
@@ -30,6 +31,7 @@ let lastKnownWidthBucket: number | null = null;
  * For example, with a current bucket of 640, an inner width of 720 stays at 640 (only 16px above
  * 704), while 728 grows to 704.
  */
+// fallow-ignore-next-line test-only-export -- pure bucket/hysteresis logic is tested directly; edge cases are impractical through the resize plugin
 export function quantizeMermaidWidth(contentWidth: number, currentBucket: number | null = null): number | null {
     if (!Number.isFinite(contentWidth) || contentWidth <= 0) {
         return null;
@@ -52,6 +54,7 @@ export function quantizeMermaidWidth(contentWidth: number, currentBucket: number
 /**
  * Resets the module-level width bucket seed (useful in tests).
  */
+// fallow-ignore-next-line test-only-export -- tests reset the module-level width seed between cases
 export function resetLastKnownMermaidWidth(): void {
     lastKnownWidthBucket = null;
 }

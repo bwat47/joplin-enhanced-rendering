@@ -17,7 +17,7 @@ export interface MathExpression {
     displayMode: boolean;
 }
 
-export type MathRenderResult = { ok: true; html: string } | { ok: false; error: string };
+type MathRenderResult = { ok: true; html: string } | { ok: false; error: string };
 
 const INLINE_MATH_NODE = 'InlineMath';
 const BLOCK_MATH_NODE = 'BlockMath';
@@ -31,6 +31,7 @@ let mathProbe: HTMLDivElement | null = null;
 /**
  * Clears the cached KaTeX render outputs (useful in tests).
  */
+// fallow-ignore-next-line test-only-export -- tests reset the module-level KaTeX caches between cases
 export function clearMathRenderCache(): void {
     mathCache.clear();
     mermaidMathCache.clear();
@@ -205,7 +206,7 @@ export function extractBlockMath(state: EditorState, node: SyntaxNodeRef): MathE
 /**
  * Renders LaTeX math synchronously via KaTeX, caching results by mode and source string.
  */
-export function renderMath(tex: string, displayMode: boolean): MathRenderResult {
+function renderMath(tex: string, displayMode: boolean): MathRenderResult {
     const cacheKey = `${displayMode ? 'B' : 'I'}:${tex}`;
     const cached = mathCache.get(cacheKey);
     if (cached) {

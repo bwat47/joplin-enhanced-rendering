@@ -2,7 +2,7 @@ import { ensureSyntaxTree } from '@codemirror/language';
 import { EditorSelection, EditorState } from '@codemirror/state';
 
 import { blockRenderingExtension } from './blockRenderingField';
-import { blockSelectionSnapFilter, snapSelectionToBlocks } from './blockSelectionSnap';
+import { blockSelectionSnapFilter } from './blockSelectionSnap';
 import { pointerRevealFreezeExtension } from './pointerRevealFreeze';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
 
@@ -31,44 +31,12 @@ function createState(anchor = 0, head = anchor): EditorState {
 }
 
 function select(state: EditorState, anchor: number, head: number): EditorSelection {
-    return state.update({ selection: { anchor, head }, userEvent: 'select' }).state.selection;
+    return selectRanges(state, EditorSelection.single(anchor, head));
 }
 
-describe('snapSelectionToBlocks', () => {
-    const blocks = [
-        { from: 10, to: 20 },
-        { from: 30, to: 40 },
-    ];
-
-    it('returns null when no range touches a block', () => {
-        expect(snapSelectionToBlocks(EditorSelection.single(0, 5), blocks)).toBeNull();
-        expect(snapSelectionToBlocks(EditorSelection.single(21, 29), blocks)).toBeNull();
-    });
-
-    it('leaves carets alone, even inside a block', () => {
-        expect(snapSelectionToBlocks(EditorSelection.single(15), blocks)).toBeNull();
-    });
-
-    it('grows forward and backward ranges over touched blocks, keeping direction', () => {
-        const forward = snapSelectionToBlocks(EditorSelection.single(5, 15), blocks)!.main;
-        expect([forward.anchor, forward.head]).toEqual([5, 20]);
-
-        const backward = snapSelectionToBlocks(EditorSelection.single(35, 15), blocks)!.main;
-        expect([backward.anchor, backward.head]).toEqual([40, 10]);
-    });
-
-    it('treats a range ending on a block boundary as touching it', () => {
-        const range = snapSelectionToBlocks(EditorSelection.single(5, 10), blocks)!.main;
-        expect([range.from, range.to]).toEqual([5, 20]);
-    });
-
-    it('merges ranges the growth pushes together', () => {
-        const selection = EditorSelection.create([EditorSelection.range(5, 12), EditorSelection.range(18, 25)]);
-        const snapped = snapSelectionToBlocks(selection, blocks)!;
-        expect(snapped.ranges).toHaveLength(1);
-        expect([snapped.main.from, snapped.main.to]).toEqual([5, 25]);
-    });
-});
+function selectRanges(state: EditorState, selection: EditorSelection): EditorSelection {
+    return state.update({ selection, userEvent: 'select' }).state.selection;
+}
 
 describe('blockSelectionSnapFilter', () => {
     it('extends a selection reaching into a rendered Mermaid block to cover all of it', () => {
@@ -85,6 +53,47 @@ describe('blockSelectionSnapFilter', () => {
         const middle = DOC.indexOf('Middle line');
         const range = select(createState(middle), middle, MATH_FROM + 4).main;
         expect([range.from, range.to]).toEqual([middle, MATH_TO]);
+    });
+
+    it('grows both ends of a backward range spanning multiple rendered blocks', () => {
+        const range = select(createState(2), MATH_FROM + 4, MERMAID_FROM + 5).main;
+        expect([range.anchor, range.head]).toEqual([MATH_TO, MERMAID_FROM]);
+    });
+
+    it('leaves selections that touch no rendered block alone', () => {
+        const range = select(createState(0), 0, 5).main;
+        expect([range.anchor, range.head]).toEqual([0, 5]);
+    });
+
+    it('treats a range ending on a block boundary as touching the block', () => {
+        const range = select(createState(2), 2, MERMAID_FROM).main;
+        expect([range.from, range.to]).toEqual([2, MERMAID_TO]);
+    });
+
+    it('merges ranges that grow over the same block', () => {
+        const middle = DOC.indexOf('Middle line');
+        const selection = selectRanges(
+            createState(2),
+            EditorSelection.create([
+                EditorSelection.range(2, MERMAID_FROM + 3),
+                EditorSelection.range(MERMAID_TO - 3, middle),
+            ])
+        );
+        expect(selection.ranges).toHaveLength(1);
+        expect([selection.main.from, selection.main.to]).toEqual([2, middle]);
+    });
+
+    it('leaves a caret inside a rendered block alone while growing other ranges', () => {
+        const middle = DOC.indexOf('Middle line');
+        const caret = MERMAID_FROM + 5;
+        const selection = selectRanges(
+            createState(2),
+            EditorSelection.create([EditorSelection.cursor(caret), EditorSelection.range(middle, MATH_FROM + 4)], 0)
+        );
+        expect(selection.ranges.map((range) => [range.anchor, range.head])).toEqual([
+            [caret, caret],
+            [middle, MATH_TO],
+        ]);
     });
 
     it('leaves selections inside a revealed block alone', () => {
