@@ -1,38 +1,49 @@
 /**
  * Pele CSS custom properties mapped to Joplin's theme variables, with CodeMirror light/dark
- * fallbacks for hosts that don't define a variable. Shared by the editor theme and the
- * full-screen diagram dialog so both color diagrams the same way.
+ * fallbacks for hosts that don't define a variable. Shared by the editor theme, the full-screen
+ * diagram dialog, and diagram export so all of them color diagrams the same way.
  */
 
-type PeleThemeVariables = Record<`--pele-${string}`, string>;
+type PeleVariableName = `--pele-${string}`;
+type PeleThemeVariables = Record<PeleVariableName, string>;
 
-const LIGHT_THEME: PeleThemeVariables = {
-    '--pele-bg': 'var(--joplin-background-color, #ffffff)',
-    '--pele-fg': 'var(--joplin-color, #1f1f1f)',
-    '--pele-muted': 'var(--joplin-color-faded, #6e6e6e)',
-    '--pele-line': 'var(--joplin-color, #1f1f1f)',
-    '--pele-surface': 'var(--joplin-background-color3, #f3f3f3)',
-    '--pele-surface-alt': 'var(--joplin-background-color-hover3, #e6e6e6)',
-    '--pele-border': 'var(--joplin-divider-color, #8a8a8a)',
-    '--pele-accent': 'var(--joplin-url-color, #205ea6)',
-    '--pele-font': 'inherit',
-    '--pele-radius': '4px',
-};
+interface PeleColor {
+    /** Joplin theme variable the color follows inside Joplin. */
+    joplin: `--joplin-${string}`;
+    light: string;
+    dark: string;
+}
 
-const DARK_THEME: PeleThemeVariables = {
-    '--pele-bg': 'var(--joplin-background-color, #1d2024)',
-    '--pele-fg': 'var(--joplin-color, #dddddd)',
-    '--pele-muted': 'var(--joplin-color-faded, #9ca3af)',
-    '--pele-line': 'var(--joplin-color, #dddddd)',
-    '--pele-surface': 'var(--joplin-background-color3, #2b2f36)',
-    '--pele-surface-alt': 'var(--joplin-background-color-hover3, #363b44)',
-    '--pele-border': 'var(--joplin-divider-color, #555b66)',
-    '--pele-accent': 'var(--joplin-url-color, #6ea8fe)',
-    '--pele-font': 'inherit',
-    '--pele-radius': '4px',
+const PELE_COLORS: Record<PeleVariableName, PeleColor> = {
+    '--pele-bg': { joplin: '--joplin-background-color', light: '#ffffff', dark: '#1d2024' },
+    '--pele-fg': { joplin: '--joplin-color', light: '#1f1f1f', dark: '#dddddd' },
+    '--pele-muted': { joplin: '--joplin-color-faded', light: '#6e6e6e', dark: '#9ca3af' },
+    '--pele-line': { joplin: '--joplin-color', light: '#1f1f1f', dark: '#dddddd' },
+    '--pele-surface': { joplin: '--joplin-background-color3', light: '#f3f3f3', dark: '#2b2f36' },
+    '--pele-surface-alt': { joplin: '--joplin-background-color-hover3', light: '#e6e6e6', dark: '#363b44' },
+    '--pele-border': { joplin: '--joplin-divider-color', light: '#8a8a8a', dark: '#555b66' },
+    '--pele-accent': { joplin: '--joplin-url-color', light: '#205ea6', dark: '#6ea8fe' },
 };
 
 /** Returns the Pele custom properties for a light or dark editor theme. */
 export function peleThemeVariables(dark: boolean): PeleThemeVariables {
-    return dark ? DARK_THEME : LIGHT_THEME;
+    const variables: PeleThemeVariables = {};
+    for (const [name, color] of Object.entries(PELE_COLORS) as [PeleVariableName, PeleColor][]) {
+        variables[name] = `var(${color.joplin}, ${dark ? color.dark : color.light})`;
+    }
+    variables['--pele-font'] = 'inherit';
+    variables['--pele-radius'] = '4px';
+    return variables;
+}
+
+/**
+ * Returns the fixed light or dark Pele colors, independent of the Joplin theme. Used for diagram
+ * export, where the result must look the same outside Joplin.
+ */
+export function peleThemeColors(dark: boolean): PeleThemeVariables {
+    const colors: PeleThemeVariables = {};
+    for (const [name, color] of Object.entries(PELE_COLORS) as [PeleVariableName, PeleColor][]) {
+        colors[name] = dark ? color.dark : color.light;
+    }
+    return colors;
 }

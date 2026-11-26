@@ -92,3 +92,50 @@
     height: auto;
     max-width: none !important;
 }
+
+/*
+ * Export menu: a popover anchored below the Export button. The popover gives toggling, outside
+ * clicks, and Escape handling for free; without anchor positioning it still opens, just unanchored.
+ */
+.er-fullscreen__export {
+    anchor-name: --er-fullscreen-export;
+}
+
+.er-fullscreen__menu {
+    background: var(--joplin-background-color, #ffffff);
+    border: 1px solid var(--joplin-divider-color, #dddddd);
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+    color: var(--joplin-color, #32373f);
+    font: inherit;
+    inset: auto;
+    margin: 4px 0 0;
+    padding: 4px 0;
+    position-anchor: --er-fullscreen-export;
+    right: anchor(right);
+    top: anchor(bottom);
+}
+
+.er-fullscreen__menu-item {
+    background: none;
+    border: none;
+    color: inherit;
+    cursor: pointer;
+    display: block;
+    font: inherit;
+    padding: 6px 16px;
+    text-align: left;
+    white-space: nowrap;
+    width: 100%;
+}
+
+.er-fullscreen__menu-item:focus-visible {
+    background: var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15));
+    outline: none;
+}
+
+@media (hover: hover) {
+    .er-fullscreen__menu-item:hover {
+        background: var(--joplin-background-color-hover3, rgba(128, 128, 128, 0.15));
+    }
+}

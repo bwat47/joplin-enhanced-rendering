@@ -28,7 +28,7 @@ describe('full-screen pan/zoom viewer (browser)', () => {
     it('fits the diagram, then zooms with the toolbar, wheel, and pans by dragging', async () => {
         // Simulates Joplin setting the dialog HTML after the script has loaded.
         await import('./panZoom');
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 1);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 1, exportConfig: null });
         await nextFrames();
 
         const viewport = document.querySelector<HTMLElement>('.er-fullscreen__viewport')!;
@@ -72,12 +72,12 @@ describe('full-screen pan/zoom viewer (browser)', () => {
 
     it('attaches to replacement markup when the dialog is reopened', async () => {
         await import('./panZoom');
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 2);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 2, exportConfig: null });
         await nextFrames();
         await userEvent.click(document.querySelector<HTMLElement>('[data-action="zoom-in"]')!);
         expect(zoomLevel()).toBe('250%');
 
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 3);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 3, exportConfig: null });
         await nextFrames();
         expect(zoomLevel()).toBe('200%');
         await userEvent.click(document.querySelector<HTMLElement>('[data-action="fit"]')!);
@@ -86,7 +86,7 @@ describe('full-screen pan/zoom viewer (browser)', () => {
 
     it('disposes the viewer when its root is removed from the DOM', async () => {
         await import('./panZoom');
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 4);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 4, exportConfig: null });
         await nextFrames();
 
         const activeKeydown = new KeyboardEvent('keydown', { key: '+', cancelable: true });
@@ -103,7 +103,7 @@ describe('full-screen pan/zoom viewer (browser)', () => {
 
     it('keeps auto-fit active after horizontal-only wheel events', async () => {
         await import('./panZoom');
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 5);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 5, exportConfig: null });
         await nextFrames();
 
         const root = document.querySelector<HTMLElement>('.er-fullscreen')!;
@@ -120,7 +120,7 @@ describe('full-screen pan/zoom viewer (browser)', () => {
 
     it('keeps auto-fit active after zero-delta pointermove events', async () => {
         await import('./panZoom');
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 7);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 7, exportConfig: null });
         await nextFrames();
 
         const root = document.querySelector<HTMLElement>('.er-fullscreen')!;
@@ -150,7 +150,12 @@ describe('full-screen pan/zoom viewer (browser)', () => {
         await import('./panZoom');
         const wideSvg =
             '<svg xmlns="http://www.w3.org/2000/svg" class="pele" viewBox="0 0 20000 200" width="20000" height="200" style="max-width:100%;height:auto"><rect width="20000" height="200"/></svg>';
-        document.body.innerHTML = renderFullscreenDialogHtml(wideSvg, false, 8);
+        document.body.innerHTML = renderFullscreenDialogHtml({
+            svg: wideSvg,
+            dark: false,
+            openId: 8,
+            exportConfig: null,
+        });
         await nextFrames();
 
         const root = document.querySelector<HTMLElement>('.er-fullscreen')!;
@@ -169,7 +174,7 @@ describe('full-screen pan/zoom viewer (browser)', () => {
 
     it('clears pointer state when pointer capture is lost', async () => {
         await import('./panZoom');
-        document.body.innerHTML = renderFullscreenDialogHtml(SVG, false, 6);
+        document.body.innerHTML = renderFullscreenDialogHtml({ svg: SVG, dark: false, openId: 6, exportConfig: null });
         await nextFrames();
 
         const viewport = document.querySelector<HTMLElement>('.er-fullscreen__viewport')!;
