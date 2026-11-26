@@ -46,10 +46,10 @@ const enhancedRenderingTheme = EditorView.baseTheme({
         textAlign: 'center',
         overflowX: 'auto',
         cursor: 'pointer',
+        // Mobile WebViews flash a tap highlight on clickable elements, including when a scroll
+        // gesture starts on a widget.
+        WebkitTapHighlightColor: 'transparent',
         transition: 'border-color 120ms ease',
-    },
-    '.cm-enhanced-rendering-block:not(.cm-enhanced-rendering-preview):hover': {
-        borderColor: 'var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
     },
     // Live preview below revealed block source. Inset shadows frame it without changing the
     // border box that Mermaid width measurement budgets for.
@@ -86,9 +86,12 @@ const enhancedRenderingTheme = EditorView.baseTheme({
         cursor: 'pointer',
         transition: 'opacity 120ms ease',
     },
-    // Reveal and highlight on hover where the device can hover; touch devices keep the button
-    // visible without sticky :hover highlights after a tap.
+    // Hover effects apply only where the device can hover; touch devices would otherwise keep a
+    // sticky :hover state after a tap or scroll. Touch devices keep the button always visible.
     '@media (hover: hover)': {
+        '.cm-enhanced-rendering-block:not(.cm-enhanced-rendering-preview):hover': {
+            borderColor: 'var(--joplin-divider-color, rgba(128, 128, 128, 0.5))',
+        },
         '.cm-enhanced-rendering-fullscreen-button': {
             opacity: '0',
         },
@@ -110,6 +113,7 @@ const enhancedRenderingTheme = EditorView.baseTheme({
         display: 'inline-block',
         verticalAlign: 'baseline',
         cursor: 'pointer',
+        WebkitTapHighlightColor: 'transparent',
     },
     /*
      * Joplin's CM6 theme sets `& div, & span, & a { font-family: inherit }` (specificity 0,1,1)
