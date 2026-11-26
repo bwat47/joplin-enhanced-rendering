@@ -10,7 +10,9 @@
     "ignorePatterns": ["**/*.d.ts", "api/**", "src/logger.ts"],
     "rules": {
         "complexity-crap": "off",
-        "dev-dependencies-in-production": "off"
+        "dev-dependencies-in-production": "off",
+        "test-only-exports": "warn",
+        "require-suppression-reason": "error"
     },
     "health": {
         "ignore": ["src/**/*.test.ts", "src/contentScript/testing/**/*.ts"],
