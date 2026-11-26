@@ -4,7 +4,8 @@
 
 import { svgDataUrl, type StandaloneSvg } from './standaloneSvg';
 
-// Chromium refuses larger canvases, and a full-size RGBA buffer at the area limit is ~256 MB.
+// Cap canvas dimensions to limit memory use during SVG rasterization.
+// At the pixel-area cap, one RGBA buffer uses 256 MiB.
 const MAX_CANVAS_SIDE = 16_384;
 const MAX_CANVAS_AREA = 8_192 * 8_192;
 
