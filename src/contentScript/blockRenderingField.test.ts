@@ -1,8 +1,8 @@
 import { ensureSyntaxTree, syntaxTreeAvailable } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import { EditorView, type Decoration, type DecorationSet, type WidgetType } from '@codemirror/view';
-import type * as Katex from 'katex';
 import { renderToString } from 'katex';
+import type * as Katex from 'katex';
 import { vi } from 'vitest';
 
 import { blockRenderingExtension } from './blockRenderingField';

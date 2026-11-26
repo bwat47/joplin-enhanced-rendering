@@ -1,10 +1,10 @@
 import { syntaxTreeAvailable } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import type * as Katex from 'katex';
 import { renderToString } from 'katex';
-import type * as Pele from 'pele';
+import type * as Katex from 'katex';
 import { render as renderPele } from 'pele';
+import type * as Pele from 'pele';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { enhancedRenderingExtension } from './enhancedRendering';

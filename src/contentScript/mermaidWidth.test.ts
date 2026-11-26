@@ -1,7 +1,7 @@
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import type * as Katex from 'katex';
 import { renderToString } from 'katex';
+import type * as Katex from 'katex';
 import { vi } from 'vitest';
 
 import { blockRenderingExtension } from './blockRenderingField';

@@ -1,8 +1,8 @@
 import { syntaxTree } from '@codemirror/language';
 import { EditorState } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
-import type * as pele from 'pele';
 import { render as renderPele } from 'pele';
+import type * as pele from 'pele';
 
 import { clearMermaidRenderCache, extractMermaidBlock, MermaidWidget, type MermaidBlock } from './mermaidRenderer';
 import { createJoplinMarkdownExtension } from './testing/joplinMarkdownMath';
