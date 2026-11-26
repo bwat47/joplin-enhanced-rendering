@@ -15,6 +15,8 @@ Left clicking on rendered content will reveal the markdown syntax. For math bloc
 
 Clicking the full screen button on the top-right of a Mermaid diagram will open a fullscreen dialog where you can pan/zoom the diagram.
 
+On desktop, the fullscreen dialog's **Export** menu can save the diagram as an SVG or PNG file, or copy it to the clipboard as HTML (an image with an embedded SVG or PNG). Under `Tools > Options > Enhanced Rendering` you can choose the export appearance (Light, Dark, or As shown in Joplin; Light by default) and the PNG scale (1× to 4×; 2× by default).
+
 ## Requirements
 
 - Joplin 3.7 or newer

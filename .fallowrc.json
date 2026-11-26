@@ -3,6 +3,7 @@
     "entry": [
         "src/contentScript/enhancedRendering.ts",
         "src/fullscreenDialog/panZoom.ts",
+        "src/fullscreenDialog/exportMenu.ts",
         "src/fullscreenDialog/styles.css"
     ],
     "supportEntry": ["src/**/*.test.ts", "src/contentScript/testing/**/*.ts"],

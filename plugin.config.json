@@ -1,6 +1,6 @@
 {
     "extraScripts": ["contentScript/enhancedRendering.ts"],
-    "webviewScripts": ["fullscreenDialog/panZoom.ts"],
+    "webviewScripts": ["fullscreenDialog/panZoom.ts", "fullscreenDialog/exportMenu.ts"],
     "buildOptions": {
         "target": "es2020"
     },

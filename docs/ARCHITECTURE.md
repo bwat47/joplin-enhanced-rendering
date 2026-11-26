@@ -39,6 +39,16 @@ Rendered Mermaid diagrams and their live previews show a button in the top-right
 2. **Main process (`fullscreenDialog/dialog.ts`)**: `index.ts` receives the message through `joplin.contentScripts.onMessage` and opens a Joplin dialog with fit-to-content off, so it takes most of the window. `dialogHtml.ts` wraps the SVG in a toolbar and viewport, setting Pele's color variables inline from the same `peleTheme.ts` mapping the editor theme uses.
 3. **Webview (`fullscreenDialog/panZoom.ts`)**: Applies a CSS `translate()`/`scale()` transform to the diagram. A single pointer pans, two pointers pinch-zoom, the wheel zooms around the cursor, and double-click, the toolbar, or `0` fits the diagram to the window. The geometry lives in `panZoomMath.ts`. Joplin can set the dialog HTML before or after the script loads, so a `MutationObserver` attaches a fresh viewer to each new root.
 
+### Diagram Export (desktop only)
+
+On desktop the dialog toolbar has an Export menu: Save as SVG, Save as PNG, Copy as HTML (SVG), and Copy as HTML (PNG). Mobile has neither plugin clipboard HTML support nor downloads from plugin webviews, so `index.ts` checks `joplin.versionInfo()` and only registers the export settings and the menu on desktop.
+
+1. **Settings (`settings.ts`, `exportOptions.ts`)**: The export appearance (light, dark, or as shown in Joplin) and PNG scale (1×–4×). `dialog.ts` reads them, plus the selected note's title for the suggested file name, each time the dialog opens and passes them to the webview as data attributes on the viewer root.
+2. **Menu (`fullscreenDialog/exportMenu.ts`)**: A native `popover` anchored to the Export button (CSS anchor positioning), so toggling, outside clicks, and Escape need no script. A delegated click handler runs the chosen export.
+3. **Standalone SVG (`standaloneSvg.ts`)**: Pele colors every element through `--pele-*` variables on the SVG root, so export recolors a clone by setting those variables, without re-rendering. Light and dark use the fixed palette from `peleTheme.ts`; "as shown" reads the values the dialog resolved from Joplin's theme. An opaque background rect is added and the result is serialized as XML.
+4. **PNG (`rasterize.ts`)**: Draws the SVG from a `data:` URL onto a canvas at the configured scale (lowered if the canvas would exceed Chromium's limits). The `data:` URL keeps the canvas readable even with `<foreignObject>` math labels.
+5. **Output**: Saving clicks an `<a download>` Blob link, which makes Joplin desktop show its Save As dialog. Copying builds an `<img>` with a base64 `data:` URL and posts it to the main process (`exportMessage.ts`), which writes it with `joplin.clipboard.writeHtml`; the result shows in place of the toolbar hint.
+
 ### Renderers & Caching
 
 - **Mermaid (`mermaidRenderer.ts`, `mermaidWidth.ts`)**: Synchronously renders diagrams to responsive SVGs via Pele (with external images/links disabled for safety) and shows inline error widgets on invalid syntax. An editor-level width tracker quantizes and debounces the available width into coarse `maxWidth` buckets (reused across note switches) so narrow panes and mobile viewports get adaptive layouts without resize thrashing. Widgets render lazily when mounted, so width changes only re-render visible diagrams and keep the existing DOM when the SVG is unchanged.
@@ -61,11 +71,18 @@ Rendered Mermaid diagrams and their live previews show a button in the top-right
 | `src/contentScript/mathRenderer.ts`            | Math extraction, KaTeX rendering, Mermaid math integration, and `MathWidget`.             |
 | `src/contentScript/renderUtils.ts`             | Shared LRU cache, selection intersection checks, click-to-edit, and indentation helpers.  |
 | `src/fullscreenMessage.ts`                     | Content script → plugin message for opening a diagram full screen.                        |
-| `src/peleTheme.ts`                             | Pele CSS variables mapped to Joplin theme variables, shared by the editor and the dialog. |
+| `src/peleTheme.ts`                             | Pele CSS variables mapped to Joplin theme variables, plus fixed light/dark export colors. |
 | `src/fullscreenDialog/dialog.ts`               | Creates and opens the full-screen diagram dialog.                                         |
 | `src/fullscreenDialog/dialogHtml.ts`           | Dialog markup: toolbar, viewport, and themed diagram stage.                               |
 | `src/fullscreenDialog/panZoom.ts`              | Webview script for panning and zooming the diagram.                                       |
 | `src/fullscreenDialog/panZoomMath.ts`          | Pure fit, zoom, pinch, and wheel geometry.                                                |
+| `src/fullscreenDialog/exportMenu.ts`           | Webview script for the dialog's Export menu (desktop only).                               |
+| `src/fullscreenDialog/standaloneSvg.ts`        | Self-contained, recolored SVG for export, and base64 `data:` URLs.                        |
+| `src/fullscreenDialog/rasterize.ts`            | SVG to PNG canvas rendering and canvas size limits.                                       |
+| `src/fullscreenDialog/exportMessage.ts`        | Webview → plugin message for copying a diagram as HTML.                                   |
+| `src/fullscreenDialog/exportFileName.ts`       | Suggested export file name from the note title.                                           |
+| `src/exportOptions.ts`                         | Export appearance and PNG scale options, shared by settings and the webview.              |
+| `src/settings.ts`                              | Registers and reads the plugin's export settings.                                         |
 | `src/logger.ts`                                | Logging wrapper.                                                                          |
 
 ## Build & Packaging
@@ -73,5 +90,5 @@ Rendered Mermaid diagrams and their live previews show a button in the top-right
 `npm run dist` runs TypeScript typechecking, then bundles `dist/` and packages `publish/*.jpl` via `@bwat47/joplin-plugin-scripts` (esbuild).
 
 - Joplin's CodeMirror and Lezer packages are kept external and provided by the host app at runtime.
-- `fullscreenDialog/panZoom.ts` is listed under `webviewScripts` and bundled as a standalone script for the dialog; `fullscreenDialog/styles.css` is copied as a runtime asset.
+- `fullscreenDialog/panZoom.ts` and `fullscreenDialog/exportMenu.ts` are listed under `webviewScripts` and bundled as standalone scripts for the dialog; `fullscreenDialog/styles.css` is copied as a runtime asset.
 - `plugin.config.json` configures esbuild to inline KaTeX `.woff2` fonts as data URIs into the emitted `enhancedRendering.css` (dropping legacy `.woff`/`.ttf` fallbacks) so fonts load reliably on both desktop and mobile when Joplin injects the CSS into a `<style>` tag.
