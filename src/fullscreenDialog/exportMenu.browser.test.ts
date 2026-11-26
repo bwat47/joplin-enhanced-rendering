@@ -15,9 +15,9 @@ const SVG =
 const postMessage = vi.fn<(message: unknown) => Promise<unknown>>();
 const downloads: { name: string; href: string }[] = [];
 
-function mountDialog(appearance: ExportAppearance, pngScale = 2): void {
+function mountDialog(appearance: ExportAppearance, pngScale = 2, svg = SVG): void {
     document.body.innerHTML = renderFullscreenDialogHtml({
-        svg: SVG,
+        svg,
         dark: false,
         openId: 1,
         exportConfig: { options: { appearance, pngScale }, fileName: 'My note' },
@@ -125,6 +125,21 @@ describe('full-screen export menu (browser)', () => {
         expect(image.naturalWidth).toBe(200);
         await vi.waitFor(() =>
             expect(document.querySelector('.er-fullscreen__hint')?.textContent).toBe('Copied to clipboard')
+        );
+    });
+
+    it('keeps the reduced-scale notice when copying a large diagram as PNG', async () => {
+        const wideSvg =
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8192 100" width="8192" height="100"></svg>';
+        postMessage.mockResolvedValue({ ok: true });
+        mountDialog('light', 4, wideSvg);
+        await chooseExport('copy-html-png');
+
+        await copiedHtml();
+        await vi.waitFor(() =>
+            expect(document.querySelector('.er-fullscreen__hint')?.textContent).toBe(
+                'Copied to clipboard (PNG scale reduced to 2×)'
+            )
         );
     });
 

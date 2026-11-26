@@ -98,20 +98,36 @@ function imageHtml(src: string, { width, height }: StandaloneSvg): string {
     return `<img src="${src}" width="${Math.round(width)}" height="${Math.round(height)}" alt="Mermaid diagram">`;
 }
 
-async function renderPng(target: ExportTarget): Promise<HTMLCanvasElement> {
-    const { width, height } = target.standalone;
-    const scale = fitPngScale(width, height, target.pngScale);
-    if (scale < target.pngScale) {
-        showStatus(target.root, `PNG scale reduced to ${Math.floor(scale * 10) / 10}× to stay within size limits`);
-    }
-    return rasterizeSvg(target.standalone, scale);
+interface RenderedPng {
+    canvas: HTMLCanvasElement;
+    /** Set when the requested PNG scale was lowered to stay within canvas size limits. */
+    reducedScale: number | null;
 }
 
-async function copyHtml(target: ExportTarget, html: string): Promise<void> {
+function formatScale(scale: number): string {
+    return `${Math.floor(scale * 10) / 10}×`;
+}
+
+async function renderPng(target: ExportTarget): Promise<RenderedPng> {
+    const { width, height } = target.standalone;
+    const scale = fitPngScale(width, height, target.pngScale);
+    const canvas = await rasterizeSvg(target.standalone, scale);
+    return { canvas, reducedScale: scale < target.pngScale ? scale : null };
+}
+
+async function copyHtml(target: ExportTarget, html: string, reducedScale: number | null = null): Promise<void> {
     const message: CopyDiagramHtmlMessage = { type: 'copyDiagramHtml', html };
     // oxlint-disable-next-line unicorn/require-post-message-target-origin -- Joplin's webview API, not window.postMessage.
     const result = (await webviewApi.postMessage(message)) as CopyDiagramHtmlResult | undefined;
-    showStatus(target.root, result?.ok ? 'Copied to clipboard' : 'Could not copy the diagram');
+    if (!result?.ok) {
+        showStatus(target.root, 'Could not copy the diagram');
+        return;
+    }
+    const status =
+        reducedScale !== null
+            ? `Copied to clipboard (PNG scale reduced to ${formatScale(reducedScale)})`
+            : 'Copied to clipboard';
+    showStatus(target.root, status);
 }
 
 async function runExport(target: ExportTarget, action: ExportAction): Promise<void> {
@@ -120,15 +136,22 @@ async function runExport(target: ExportTarget, action: ExportAction): Promise<vo
         case 'save-svg':
             download(new Blob([standalone.markup], { type: 'image/svg+xml' }), `${fileName}.svg`);
             break;
-        case 'save-png':
-            download(await canvasToPngBlob(await renderPng(target)), `${fileName}.png`);
+        case 'save-png': {
+            const { canvas, reducedScale } = await renderPng(target);
+            download(await canvasToPngBlob(canvas), `${fileName}.png`);
+            if (reducedScale !== null) {
+                showStatus(target.root, `PNG scale reduced to ${formatScale(reducedScale)} to stay within size limits`);
+            }
             break;
+        }
         case 'copy-html-svg':
             await copyHtml(target, imageHtml(svgDataUrl(standalone.markup), standalone));
             break;
-        case 'copy-html-png':
-            await copyHtml(target, imageHtml((await renderPng(target)).toDataURL('image/png'), standalone));
+        case 'copy-html-png': {
+            const { canvas, reducedScale } = await renderPng(target);
+            await copyHtml(target, imageHtml(canvas.toDataURL('image/png'), standalone), reducedScale);
             break;
+        }
     }
 }
 
