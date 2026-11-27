@@ -1,6 +1,6 @@
 {
     "name": "joplin-plugin-enhanced-rendering",
-    "version": "0.5.0",
+    "version": "0.5.1",
     "scripts": {
         "dist": "npm run typecheck && joplin-plugin-scripts build",
         "prepare": "npm run dist",
