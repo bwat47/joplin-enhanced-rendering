@@ -8,6 +8,9 @@
     ],
     "supportEntry": ["src/**/*.test.ts", "src/contentScript/testing/**/*.ts"],
     "ignorePatterns": ["**/*.d.ts", "api/**", "src/logger.ts"],
+    "typeAware": {
+        "enabled": true
+    },
     "rules": {
         "complexity-crap": "off",
         "dev-dependencies-in-production": "off",
